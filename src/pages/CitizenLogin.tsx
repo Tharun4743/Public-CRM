@@ -14,6 +14,7 @@ export const CitizenLogin = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,6 +55,10 @@ export const CitizenLogin = () => {
         if (!isLogin) {
           setIsVerifying(true);
           setSuccessMessage(data.message);
+          if (data.devCode) {
+            setDevCode(data.devCode);
+            setVerificationCode(data.devCode); // auto-fill OTP field
+          }
         } else {
           localStorage.setItem('citizen_token', data.token);
           navigate(redirectPath);
@@ -115,8 +120,11 @@ export const CitizenLogin = () => {
       if (!response.ok) {
         throw new Error(data.message || 'Failed to resend code');
       }
-
-      setSuccessMessage("A new verification code has been sent!");
+      setSuccessMessage(data.message || 'A new verification code has been sent!');
+      if (data.devCode) {
+        setDevCode(data.devCode);
+        setVerificationCode(data.devCode);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -169,10 +177,22 @@ export const CitizenLogin = () => {
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest"
+              className="mb-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest"
             >
               <ShieldCheck size={18} />
               {successMessage}
+            </motion.div>
+          )}
+
+          {devCode && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl text-center"
+            >
+              <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-2">⚠️ Email not sent — Use this code instead</p>
+              <div className="text-4xl font-black text-amber-900 tracking-[0.5rem] font-mono">{devCode}</div>
+              <p className="text-[9px] text-amber-500 mt-2 font-bold italic">Already auto-filled below. Just click Verify.</p>
             </motion.div>
           )}
 

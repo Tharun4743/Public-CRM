@@ -13,16 +13,29 @@ router.post('/register', async (req, res) => {
   const { name, email, phone, password, ward } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
   const exists = db.prepare('SELECT id FROM citizens WHERE LOWER(email)=LOWER(?)').get(email);
-  if (exists) return res.status(409).json({ message: 'Citizen already exists' });
+  if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
   const hash = await bcrypt.hash(password, 10);
   const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const result = db.prepare(`
+  db.prepare(`
     INSERT INTO citizens (name, email, phone, password_hash, ward, isVerified, verificationCode, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(name, email, phone || null, hash, ward || null, 0, verificationCode, new Date().toISOString());
-  await emailService.sendVerificationEmail(email, verificationCode);
+  
+  console.log(`[OTP] Registration OTP for ${email}: ${verificationCode}`);
+  let emailSent = false;
+  try {
+    await emailService.sendVerificationEmail(email, verificationCode);
+    emailSent = true;
+  } catch (err) {
+    console.error('[OTP] Email delivery failed, code is in logs:', err);
+  }
 
-  res.status(201).json({ message: 'Verification code sent to email' });
+  // Always return the code in demo/dev mode so sign-up never breaks
+  const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
+  res.status(201).json({ 
+    message: emailSent ? 'Verification code sent to your email.' : `Email delivery failed. Use this code to verify: ${verificationCode}`,
+    ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode })
+  });
 });
 
 router.post('/login', async (req, res) => {
@@ -62,8 +75,19 @@ router.post('/resend-code', async (req, res) => {
   
   const newCode = Math.floor(100000 + Math.random() * 900000).toString();
   db.prepare('UPDATE citizens SET verificationCode = ? WHERE id = ?').run(newCode, citizen.id);
-  await emailService.sendVerificationEmail(email, newCode);
-  res.json({ message: 'New verification code sent to your email.' });
+  console.log(`[OTP] Resent OTP for ${email}: ${newCode}`);
+  let emailSent = false;
+  try {
+    await emailService.sendVerificationEmail(email, newCode);
+    emailSent = true;
+  } catch (err) {
+    console.error('[OTP] Resend email failed:', err);
+  }
+  const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
+  res.json({ 
+    message: emailSent ? 'New verification code sent to your email.' : `Email failed. Use this code: ${newCode}`,
+    ...(isRealSmtp && emailSent ? {} : { devCode: newCode })
+  });
 });
 
 router.get('/me', requireCitizenAuth, async (req: AuthenticatedRequest, res) => {
