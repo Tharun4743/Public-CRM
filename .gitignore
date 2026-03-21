@@ -13,6 +13,10 @@ dist/
 build/
 out/
 .next/
+public/assets/
+public/index.html
+public/*.js
+public/*.css
 
 # Logs
 *.log
