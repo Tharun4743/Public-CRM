@@ -9,6 +9,11 @@ const dbPath = path.resolve(__dirname, '../../pscrm.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('temp_store = MEMORY');
+db.pragma('mmap_size = 30000000000');
+db.pragma('page_size = 4096');
+db.pragma('cache_size = -16000'); // 16MB cache
 
 export const initDb = () => {
     console.log('Initializing database schema...');
