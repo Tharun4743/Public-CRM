@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npx concurrently \"tsx server.ts\" \"vite --host\"",
+    "dev": "concurrently \"tsx server.ts\" \"vite --host\"",
     "build": "vite build",
-    "start": "node --import tsx/esm server.ts",
+    "start": "node --max-old-space-size=512 --import tsx/esm server.ts",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
@@ -54,6 +54,7 @@
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
+    "terser": "^5.46.1",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

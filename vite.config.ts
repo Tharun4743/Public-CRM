@@ -56,7 +56,19 @@ export default defineConfig(({mode}) => {
     },
     build: {
       outDir: 'public',
-      emptyOutDir: true
+      emptyOutDir: true,
+      sourcemap: false,
+      minify: 'terser',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui': ['lucide-react', 'motion'],
+            'vendor-maps': ['leaflet', 'react-leaflet'],
+            'vendor-charts': ['recharts']
+          }
+        }
+      }
     }
   };
 });

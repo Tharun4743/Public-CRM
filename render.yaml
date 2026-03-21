@@ -4,7 +4,7 @@ services:
     runtime: node
     region: singapore
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/users/pending-officers
     envVars:
