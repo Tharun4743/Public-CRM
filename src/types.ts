@@ -23,6 +23,27 @@ export interface Complaint {
   createdAt: string;
   updatedAt: string;
   assignedTo?: string;
+  ai_priority?: string;
+  sentiment_score?: number;
+  urgency_level?: string;
+  estimated_resolution_days?: number;
+  ai_summary?: string;
+  ai_tags?: string; // stored as JSON string in DB, might come as array from API
+  recommended_department?: string;
+  ai_resolution_steps?: string; // stored as JSON string
+  sla_deadline?: string;
+  sla_status?: string;
+  escalation_level?: number;
+  vote_count?: number;
+  is_cluster_head?: number;
+  source?: string;
+  citizen_phone?: string;
+  citizen_id?: number;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  complaint_image?: string;
+  citizen_email?: string;
 }
 
 export interface ComplaintStats {
@@ -44,8 +65,7 @@ export interface User {
   password?: string; // Only on backend
   role: UserRole;
   department?: string; // For officers
-  employeeId?: string; // For officers
-  idProof?: string; // For officers (base64 or filename)
   isVerified?: boolean;
   verificationCode?: string;
+  isApproved?: boolean;
 }

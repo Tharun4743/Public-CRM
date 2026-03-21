@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Lock, ShieldCheck, AlertCircle, Mail } from 'lucide-react';
+import { Lock, ShieldCheck, AlertCircle, Mail, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserRole } from '../types';
 
@@ -42,6 +42,7 @@ export const PortalAuth: React.FC<PortalAuthProps> = ({ children, portalName, ro
       }
 
       // In a real app, we'd store the user/token in context or localStorage
+      localStorage.setItem('user', JSON.stringify(data));
       setIsAuthenticated(true);
     } catch (err: any) {
       setError(err.message);
@@ -70,79 +71,97 @@ export const PortalAuth: React.FC<PortalAuthProps> = ({ children, portalName, ro
           <p className="text-zinc-500 mt-2">Enter your credentials to access the portal.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-base font-bold text-zinc-900 block ml-1">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-12 pr-4 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
-                placeholder="name@example.com"
-              />
-            </div>
+        {error && error.includes('pending') && error.includes('Admin') ? (
+          <div className="p-8 bg-amber-50/80 rounded-2xl border border-amber-200 shadow-sm text-center space-y-4 mt-6">
+             <div className="w-16 h-16 bg-white text-amber-500 rounded-full flex items-center justify-center mx-auto shadow-sm border border-amber-100">
+               <AlertCircle size={32} />
+             </div>
+             <h3 className="text-xl font-black text-amber-900 tracking-tight">⏳ Account Pending Approval</h3>
+             <p className="text-sm font-semibold text-amber-800/80 leading-relaxed">
+               Your officer account has been registered successfully. Please wait for an Admin to approve your access. Contact your department administrator if this takes more than 24 hours.
+             </p>
+             <button 
+               onClick={() => { setError(null); setEmail(''); setPassword(''); }}
+               className="mt-6 w-full py-4 bg-white text-zinc-900 rounded-xl font-black hover:bg-zinc-50 border-2 border-zinc-200 transition-all shadow-sm active:scale-95"
+             >
+               Return to Login
+             </button>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-base font-bold text-zinc-900 block ml-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-12 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl hover:scale-110 active:scale-95 transition-transform"
-                title={showPassword ? "Hide Password" : "Show Password"}
-              >
-                {showPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="space-y-2 mt-2 ml-1"
-            >
-              <div className="flex items-center gap-2 text-red-600 text-sm font-bold">
-                <AlertCircle size={16} />
-                {error}
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-base font-bold text-zinc-900 block ml-1">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
+                  placeholder="name@example.com"
+                />
               </div>
-              {needsVerification && (
-                <Link
-                  to={`/register?role=${role}`}
-                  className="block text-xs text-emerald-600 font-bold hover:underline"
-                >
-                  Go to verification page →
-                </Link>
-              )}
-            </motion.div>
-          )}
+            </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-zinc-200 disabled:opacity-50"
-          >
-            {isLoading ? 'Authenticating...' : (
-              <>
-                <ShieldCheck size={20} />
-                Login to Portal
-              </>
+            <div className="space-y-2">
+              <label className="text-base font-bold text-zinc-900 block ml-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-12 pr-12 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-xl text-zinc-400 hover:text-emerald-600 transition-colors"
+                  title={showPassword ? "Hide Password" : "Show Password"}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-2 mt-2 ml-1"
+              >
+                <div className="flex items-center gap-2 text-red-600 text-sm font-bold">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+                {needsVerification && (
+                  <Link
+                    to={`/register?role=${role}`}
+                    className="block text-xs text-emerald-600 font-bold hover:underline"
+                  >
+                    Go to verification page →
+                  </Link>
+                )}
+              </motion.div>
             )}
-          </button>
-        </form>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-zinc-200 disabled:opacity-50"
+            >
+              {isLoading ? 'Authenticating...' : (
+                <>
+                  <ShieldCheck size={20} />
+                  Login to Portal
+                </>
+              )}
+            </button>
+          </form>
+        )}
 
         <div className="mt-8 pt-6 border-t border-zinc-100 text-center space-y-3">
           <p className="text-sm text-zinc-500">

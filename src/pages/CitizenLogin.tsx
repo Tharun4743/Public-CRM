@@ -1,0 +1,430 @@
+import React, { useState } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  User, Mail, Lock, Phone, MapPin, ArrowRight, ShieldCheck, 
+  AlertCircle, UserPlus, LogIn, Eye, EyeOff, Star 
+} from 'lucide-react';
+
+export const CitizenLogin = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const redirectPath = queryParams.get('redirect') || '/citizen-dashboard';
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    ward: '',
+    password: '',
+    confirmPassword: ''
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    if (!isLogin && formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const endpoint = isLogin ? '/api/citizens/login' : '/api/citizens/register';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (!isLogin) {
+          setIsVerifying(true);
+          setSuccessMessage(data.message);
+        } else {
+          localStorage.setItem('citizen_token', data.token);
+          navigate(redirectPath);
+        }
+      } else {
+        if (data.needsVerification) {
+          setIsVerifying(true);
+          setError(data.message);
+        } else {
+          setError(data.message || (isLogin ? 'Authentication failed' : 'Registration failed'));
+        }
+      }
+    } catch (err) {
+      setError("Connection error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/citizens/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, code: verificationCode }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Verification failed');
+      }
+
+      localStorage.setItem('citizen_token', data.token);
+      navigate(redirectPath);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch('/api/citizens/resend-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend code');
+      }
+
+      setSuccessMessage("A new verification code has been sent!");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const inputClass = "w-full pl-12 pr-12 py-3.5 rounded-xl border-2 border-zinc-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 bg-zinc-50/50 outline-none transition-all text-base text-zinc-900 font-medium placeholder:text-zinc-400";
+  const labelClass = "text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 block ml-1";
+
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-20 relative overflow-hidden">
+        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full" />
+        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white p-10 rounded-[2.5rem] border border-zinc-200 shadow-2xl relative z-10"
+        >
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck size={40} />
+            </div>
+            <h2 className="text-3xl font-black text-zinc-950 font-display tracking-tight leading-none mb-3">Verify Email</h2>
+            <p className="text-zinc-600 mt-3 text-sm px-4 leading-relaxed">
+              We've sent a 6-digit code to <br/>
+              <span className="font-bold text-zinc-900">{formData.email}</span>
+            </p>
+            <button 
+              onClick={() => setIsVerifying(false)}
+              className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:underline mt-2"
+            >
+              Change Email Address
+            </button>
+          </div>
+
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-700 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest"
+            >
+              <AlertCircle size={18} />
+              {error}
+            </motion.div>
+          )}
+
+          {successMessage && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest"
+            >
+              <ShieldCheck size={18} />
+              {successMessage}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleVerify} className="space-y-8">
+            <div className="space-y-3">
+              <label className={labelClass}>
+                VERIFICATION CODE
+              </label>
+              <input
+                required
+                type="text"
+                maxLength={6}
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                className="w-full px-6 py-5 rounded-2xl border-2 border-zinc-200 focus:border-emerald-500 bg-zinc-50 outline-none transition-all text-3xl text-center font-black tracking-[1rem] text-zinc-900"
+                placeholder="000000"
+              />
+              <div className="flex justify-between items-center px-1">
+                <p className="text-xs text-zinc-500 italic">Check your email logs.</p>
+                <button 
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={isLoading}
+                  className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:underline disabled:opacity-50"
+                >
+                  Resend Code
+                </button>
+              </div>
+            </div>
+
+            <button
+              disabled={isLoading}
+              type="submit"
+              className="w-full py-4.5 bg-zinc-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all flex items-center justify-center gap-3 shadow-xl shadow-zinc-200 disabled:opacity-50"
+            >
+              {isLoading ? 'Verifying...' : 'Complete Registration'}
+            </button>
+          </form>
+
+          <button 
+            onClick={() => setIsVerifying(false)}
+            className="w-full mt-6 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
+            ← Back to Login
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-20 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full" />
+      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full" />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-md w-full bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-2xl shadow-zinc-200/50 relative z-10"
+      >
+        <div className="text-center mb-10">
+          <motion.div 
+            initial={{ y: -20 }}
+            animate={{ y: 0 }}
+            className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-emerald-100"
+          >
+            {isLogin ? <Lock size={36} /> : <UserPlus size={36} />}
+          </motion.div>
+          <h2 className="text-3xl font-black text-zinc-900 tracking-tight leading-none mb-3">
+            {isLogin ? 'Citizen Portal Login' : 'Create Citizen Account'}
+          </h2>
+          <p className="text-zinc-500 font-medium text-sm px-4 leading-relaxed">
+            {isLogin 
+              ? 'Enter your credentials to access your secure dashboard.' 
+              : 'Join the digital governance network to earn merit points.'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={isLogin ? 'login' : 'register'}
+              initial={{ opacity: 0, x: isLogin ? -20 : 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: isLogin ? 20 : -20 }}
+              className="space-y-5"
+            >
+              {!isLogin && (
+                <div className="space-y-2">
+                  <label className={labelClass}>FULL IDENTITY NAME</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      placeholder="ENTER FULL NAME"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className={labelClass}>EMAIL ADDRESS</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                  <input
+                    required
+                    type="email"
+                    className={inputClass}
+                    placeholder="name@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {!isLogin && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className={labelClass}>PHONE</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                      <input
+                        required
+                        type="tel"
+                        className={inputClass}
+                        placeholder="PH NO"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelClass}>TALUK</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                      <input
+                        required
+                        type="text"
+                        className={inputClass}
+                        placeholder="TALUK NO"
+                        value={formData.ward}
+                        onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className={labelClass}>PASSWORD</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                  <input
+                    required
+                    type={showPassword ? "text" : "password"}
+                    className={inputClass}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-xl text-zinc-400 hover:text-emerald-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+
+              {!isLogin && (
+                <div className="space-y-2">
+                  <label className={labelClass}>CONFIRM PASSWORD</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                    <input
+                      required
+                      type="password"
+                      className={inputClass}
+                      placeholder="••••••••"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-3"
+            >
+              <AlertCircle size={16} />
+              {error}
+            </motion.div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-4.5 bg-zinc-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all shadow-xl shadow-zinc-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3 group"
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <span>Authenticating...</span>
+              </div>
+            ) : (
+              <>
+                <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" />
+                {isLogin ? 'Login to Portal' : 'Register Account'}
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-10 pt-8 border-t border-zinc-100 text-center space-y-4">
+          <p className="text-sm text-zinc-500 font-medium">
+            {isLogin ? "First time here?" : "Already have an account?"}{' '}
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-emerald-600 font-bold hover:underline"
+            >
+              {isLogin ? 'Create an account' : 'Sign in instead'}
+            </button>
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center justify-center gap-2 mx-auto text-zinc-400 hover:text-zinc-600 transition-colors text-[10px] font-black uppercase tracking-widest"
+          >
+            <ArrowRight className="rotate-180" size={14} />
+            Back to Portal Selection
+          </button>
+        </div>
+        
+        <div className="mt-8 flex justify-center">
+          <div className="px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
+            <Star size={12} className="text-yellow-500" fill="currentColor" />
+            <span className="text-yellow-600 font-black text-[9px] uppercase tracking-widest italic leading-none">
+              Earn merit points for every report
+            </span>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};

@@ -37,3 +37,16 @@ Thumbs.db
 # Others
 coverage/
 !.env.example
+
+# Test & debug scripts (dev-only, never commit)
+test_*.js
+test_*.cjs
+inspect.cjs
+metadata.json
+
+# Vite dev-dist cache
+dev-dist/
+
+# SQLite WAL files (runtime only)
+*.db-shm
+*.db-wal

@@ -7,5 +7,7 @@ router.post("/register", userController.register);
 router.post("/resend-code", userController.resendCode);
 router.post("/verify-email", userController.verifyEmail);
 router.post("/login", userController.login);
+router.get("/pending-officers", userController.getPendingOfficers);
+router.post("/approve-officer", userController.approveOfficer);
 
 export default router;

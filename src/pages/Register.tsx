@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, Building2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Building2, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserRole } from '../types';
 
@@ -15,15 +15,14 @@ export const Register = () => {
     email: '',
     password: '',
     role: roleParam,
-    department: roleParam === UserRole.OFFICER ? 'Sanitation' : '',
-    employeeId: '',
-    idProof: ''
+    department: roleParam === UserRole.OFFICER ? 'Sanitation' : ''
   });
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [verificationCode, setVerificationCode] = React.useState('');
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const departments = [
     'Sanitation', 'Water Supply', 'Electricity', 'Roads & Transport', 'Public Safety'
@@ -41,7 +40,10 @@ export const Register = () => {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      try { data = await response.json(); } catch { 
+        throw new Error('Server is unavailable. Please try again in a moment.');
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');
       }
@@ -68,7 +70,10 @@ export const Register = () => {
         body: JSON.stringify({ email: formData.email, code: verificationCode }),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      try { data = await response.json(); } catch {
+        throw new Error('Server is unavailable. Please try again in a moment.');
+      }
       if (!response.ok) {
         throw new Error(data.message || 'Verification failed');
       }
@@ -260,14 +265,24 @@ export const Register = () => {
               <Lock size={18} className="text-emerald-600" />
               Password
             </label>
-            <input
-              required
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
-              placeholder={formData.role === UserRole.ADMIN ? "Enter Admin Secret Password" : "Create a password"}
-            />
+            <div className="relative">
+              <input
+                required
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 pr-12 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
+                placeholder={formData.role === UserRole.ADMIN ? "Enter Admin Secret Password" : "Create a password"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-xl text-zinc-400 hover:text-emerald-600 transition-colors"
+                title={showPassword ? "Hide Password" : "Show Password"}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
             {formData.role === UserRole.ADMIN && (
               <p className="text-xs text-zinc-500 ml-1 italic">Note: Admin registration requires the specific system password.</p>
             )}
@@ -291,36 +306,6 @@ export const Register = () => {
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-base font-bold text-zinc-900 flex items-center gap-2 ml-1">
-                  <ShieldCheck size={18} className="text-emerald-600" />
-                  Employee ID Number
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={formData.employeeId}
-                  onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
-                  placeholder="EMP-12345"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-base font-bold text-zinc-900 flex items-center gap-2 ml-1">
-                  <AlertCircle size={18} className="text-emerald-600" />
-                  ID Proof (Government Issued)
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={formData.idProof}
-                  onChange={(e) => setFormData({ ...formData, idProof: e.target.value })}
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-300 focus:border-emerald-500 bg-white outline-none transition-all text-lg text-zinc-900 font-medium"
-                  placeholder="Enter ID Proof Details"
-                />
-                <p className="text-xs text-zinc-500 ml-1 italic">Enter the name or reference of your government ID proof.</p>
-              </div>
             </>
           )}
 

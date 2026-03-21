@@ -6,7 +6,7 @@ import { UserRole } from "../../src/types.ts";
 export const userController = {
   register: async (req: Request, res: Response) => {
     try {
-      const { name, email, password, role, department, employeeId, idProof } = req.body;
+      const { name, email, password, role, department } = req.body;
       
       // Basic validation
       if (!name || !email || !password || !role) {
@@ -18,10 +18,7 @@ export const userController = {
         return res.status(403).json({ message: "Invalid Admin authorization password" });
       }
 
-      // Officer specific validation
-      if (role === UserRole.OFFICER && (!employeeId || !idProof)) {
-        return res.status(400).json({ message: "Employee ID and ID Proof are required for Officers" });
-      }
+
 
       // Check if user already exists
       const existingUser = await userService.findByEmail(email);
@@ -34,9 +31,7 @@ export const userController = {
         email,
         password, // FUTURE: Hash the password before storing
         role: role as UserRole,
-        department,
-        employeeId,
-        idProof
+        department
       });
 
       // Send verification email
@@ -121,12 +116,44 @@ export const userController = {
         });
       }
 
+      if (user.role === UserRole.OFFICER && !user.isApproved) {
+        return res.status(403).json({ 
+          message: "Your account is pending Admin approval. You will gain access once an Admin approves your registration."
+        });
+      }
+
       // Don't return the password or verification code in the response
       const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
       res.status(200).json(userWithoutSensitiveData);
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({ message: "Error during login" });
+    }
+  },
+
+  approveOfficer: async (req: Request, res: Response) => {
+    try {
+      const { officerId } = req.body;
+      if (!officerId) return res.status(400).json({ message: "Officer ID required" });
+      
+      const db = (await import('../db/database.ts')).default;
+      db.prepare('UPDATE users SET isApproved = 1 WHERE id = ?').run(officerId);
+      
+      res.json({ message: "Officer approved successfully" });
+    } catch (error) {
+      console.error('Approval error:', error);
+      res.status(500).json({ message: "Error approving officer" });
+    }
+  },
+
+  getPendingOfficers: async (req: Request, res: Response) => {
+    try {
+      const db = (await import('../db/database.ts')).default;
+      const officers = db.prepare("SELECT id, name, email, department, isVerified FROM users WHERE role = 'Officer' AND isApproved = 0").all();
+      res.json(officers);
+    } catch (error) {
+      console.error('Error fetching pending officers:', error);
+      res.status(500).json({ message: "Error fetching pending officers" });
     }
   }
 };

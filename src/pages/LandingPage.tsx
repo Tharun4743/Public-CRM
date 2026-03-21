@@ -12,7 +12,7 @@ export const LandingPage = () => {
       id: 'citizen',
       title: 'Citizen Portal',
       icon: User,
-      path: '/citizen',
+      path: '/citizen-login',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
       borderColor: 'border-emerald-200'

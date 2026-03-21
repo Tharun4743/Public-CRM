@@ -1,57 +1,87 @@
 import express from "express";
-import "dotenv/config";
-import { createServer as createViteServer } from "vite";
 import cors from "cors";
+import dotenv from "dotenv";
+dotenv.config();
+
+import { Server } from "socket.io";
+import http from "http";
 import complaintRoutes from "./server/routes/complaintRoutes.ts";
 import userRoutes from "./server/routes/userRoutes.ts";
+import aiRoutes from "./server/routes/aiRoutes.ts";
+import analyticsRoutes from "./server/routes/analyticsRoutes.ts";
+import notificationRoutes from "./server/routes/notificationRoutes.ts";
+import feedbackRoutes from "./server/routes/feedbackRoutes.ts";
+import anomalyRoutes from "./server/routes/anomalyRoutes.ts";
+import auditRoutes from "./server/routes/auditRoutes.ts";
+import intakeRoutes from "./server/routes/intakeRoutes.ts";
+import citizenRoutes from "./server/routes/citizenRoutes.ts";
+import leaderboardRoutes from "./server/routes/leaderboardRoutes.ts";
+import reportsRoutes from "./server/routes/reportsRoutes.ts";
+import publicRoutes from "./server/routes/publicRoutes.ts";
+import slaRoutes from "./server/routes/slaRoutes.ts";
+import rewardsRoutes from "./server/routes/rewardsRoutes.ts";
 import { initDb } from "./server/db/database.ts";
+import { auditLogger } from "./server/middleware/auditLogger.ts";
+import { slaService } from "./server/services/slaService.ts";
+import { emailPollingService } from "./server/services/emailPollingService.ts";
 
-async function startServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
-
-  // Initialize Database
-  initDb();
-
-  app.use(cors());
-  app.use(express.json());
-
-
-  // API Routes
-  app.use("/api/complaints", complaintRoutes);
-  app.use("/api/users", userRoutes);
-
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
-
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    // Production static serving
-    app.use(express.static("dist"));
+const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
   }
+});
 
-  const server = app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`\n🚀 PS-CRM Server is ready!`);
-    console.log(`👉 Access the app at: http://localhost:${PORT}`);
-    console.log(`👉 Access Admin Portal: http://localhost:${PORT}/admin\n`);
+app.use(cors());
+app.use(express.static("public"));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(auditLogger);
+
+// Routes
+app.use("/api/users", userRoutes);
+app.use("/api/complaints", complaintRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/anomalies", anomalyRoutes);
+app.use("/api/audit", auditRoutes);
+app.use("/api/intake", intakeRoutes);
+app.use("/api/citizens", citizenRoutes);
+app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/reports", reportsRoutes);
+app.use("/api/public", publicRoutes);
+app.use("/api/settings/sla", slaRoutes);
+app.use("/api/rewards", rewardsRoutes);
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Socket.io
+io.on("connection", (socket) => {
+  socket.on("join-room", (room) => {
+    socket.join(room);
+    console.log(`Socket joined room: ${room}`);
   });
+});
 
-  server.on('error', (e: any) => {
-    if (e.code === 'EADDRINUSE') {
-      console.error(`\n❌ Error: Port ${PORT} is already in use.`);
-      console.error(`💡 Try running: npx kill-port ${PORT}`);
-      console.error(`💡 Or run with a different port: PORT=3001 npm run dev\n`);
-      process.exit(1);
-    }
-  });
-}
+// Start Server
+const PORT = process.env.PORT || 3001;
 
-startServer();
+httpServer.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+    initDb();
+    slaService.startSlaMonitoring();
+    emailPollingService.start();
+});
+
+export { io };

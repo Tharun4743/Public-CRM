@@ -9,11 +9,12 @@ export const userService = {
       id: `USR-${uuidv4().slice(0, 8).toUpperCase()}`,
       isVerified: userData.role === UserRole.ADMIN ? true : false,
       verificationCode: Math.floor(100000 + Math.random() * 900000).toString(),
+      isApproved: userData.role === UserRole.ADMIN ? true : false,
     };
 
     const stmt = db.prepare(`
-        INSERT INTO users (id, name, email, password, role, department, employeeId, idProof, isVerified, verificationCode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, name, email, password, role, department, isVerified, verificationCode, isApproved)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -23,10 +24,9 @@ export const userService = {
       newUser.password || null,
       newUser.role,
       newUser.department || null,
-      newUser.employeeId || null,
-      newUser.idProof || null,
       newUser.isVerified ? 1 : 0,
-      newUser.verificationCode || null
+      newUser.verificationCode || null,
+      newUser.isApproved ? 1 : 0
     );
 
     return newUser;
@@ -37,7 +37,8 @@ export const userService = {
     if (!user) return undefined;
     return {
       ...user,
-      isVerified: !!user.isVerified
+      isVerified: !!user.isVerified,
+      isApproved: !!user.isApproved
     };
   },
 
@@ -58,7 +59,8 @@ export const userService = {
     const users = db.prepare('SELECT * FROM users').all() as any[];
     return users.map(u => ({
       ...u,
-      isVerified: !!u.isVerified
+      isVerified: !!u.isVerified,
+      isApproved: !!u.isApproved
     }));
   }
 };
