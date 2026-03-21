@@ -6,16 +6,21 @@ dotenv.config();
 const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
 const smtpUser = process.env.SMTP_USER || '';
 
-// Use Gmail service mode (more reliable on cloud servers than manual host/port)
+// Use explicit Gmail config with IPv4 force (avoids Render IPv6 routing issues)
 const createTransporter = () => {
   if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // Use STARTTLS/Explicit
       auth: { user: smtpUser, pass: smtpPass },
-      tls: { rejectUnauthorized: false }
-    });
+      // Force IPv4 to avoid ENETUNREACH errors on IPv6 networks
+      family: 4, 
+      tls: {
+        rejectUnauthorized: false
+      }
+    } as any);
   }
-  // Fallback: no real transporter (dev/log-only mode)
   return null;
 };
 
