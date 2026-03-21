@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Users, Clock, CheckCircle2, AlertCircle, Building2, ChevronRight, 
   Sparkles, Shield, Tag, Star, Activity, BarChart3, X, ChevronDown, Check, AlertTriangle,
-  Search, Filter, Download, Calendar, SlidersHorizontal, ArrowLeft, ArrowRight, FileText, MapPin, Phone, Plus, Trophy, Gift, UserCheck
+  Search, Filter, Download, Calendar, SlidersHorizontal, ArrowLeft, ArrowRight, FileText, MapPin, Phone, Plus, Trophy, Gift, UserCheck, Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Complaint, ComplaintStatus, ComplaintStats } from '../types';
@@ -25,8 +25,12 @@ export const AdminDashboard = () => {
   const [slaStats, setSlaStats] = React.useState({ onTrack: 0, atRisk: 0, breached: 0, escalated: 0 });
   
   // New States for Feature 8, 9 & 10
-  const [activeTab, setActiveTab] = React.useState<'Overview' | 'Audit' | 'Rewards' | 'Approvals'>('Overview');
+  const [activeTab, setActiveTab] = React.useState<'Overview' | 'Audit' | 'Rewards' | 'Approvals' | 'Database'>('Overview');
   const [pendingOfficers, setPendingOfficers] = React.useState<any[]>([]);
+  const [dbStats, setDbStats] = React.useState<any>(null);
+  const [dbStatsKey, setDbStatsKey] = React.useState('pscrm-admin-2024');
+  const [isLoadingDb, setIsLoadingDb] = React.useState(false);
+  const [dbError, setDbError] = React.useState<string | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = React.useState(false);
   const [totalCount, setTotalCount] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
@@ -82,6 +86,22 @@ export const AdminDashboard = () => {
     } catch (err) {
       console.error('Error approving officer:', err);
     }
+  };
+
+  const fetchDbStats = async (key?: string) => {
+    setIsLoadingDb(true);
+    setDbError(null);
+    try {
+      const res = await fetch('/api/admin/db-stats', {
+        headers: { 'x-admin-key': key || dbStatsKey }
+      });
+      if (!res.ok) { setDbError('Invalid Admin Key or server error.'); setIsLoadingDb(false); return; }
+      const data = await res.json();
+      setDbStats(data);
+    } catch (err) {
+      setDbError('Could not reach the server.');
+    }
+    setIsLoadingDb(false);
   };
 
   const fetchAuditLogs = async () => {
@@ -437,6 +457,12 @@ export const AdminDashboard = () => {
               className={`pb-2 px-1 flex items-center gap-2 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'Approvals' ? 'text-emerald-600 border-emerald-600' : 'text-zinc-400 border-transparent hover:text-emerald-500'}`}
             >
               Approvals {pendingOfficers.length > 0 && <span className="bg-emerald-500 text-white rounded-full px-2 text-[10px]">{pendingOfficers.length}</span>}
+            </button>
+            <button 
+              onClick={() => { setActiveTab('Database'); fetchDbStats(); }}
+              className={`pb-2 px-1 flex items-center gap-2 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${activeTab === 'Database' ? 'text-blue-600 border-blue-600' : 'text-zinc-400 border-transparent hover:text-blue-500'}`}
+            >
+              <Database size={14} /> DB Live
             </button>
           </div>
         </div>
@@ -1040,6 +1066,138 @@ export const AdminDashboard = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {activeTab === 'Database' && (
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+          <div className="flex justify-between items-end">
+            <div>
+              <h2 className="text-3xl font-black text-zinc-950 uppercase tracking-tighter flex items-center gap-3"><Database size={28} /> Live Database Viewer</h2>
+              <p className="text-zinc-500 font-medium italic">Real-time snapshot of all tables in the deployed database.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="password"
+                placeholder="Admin DB Key"
+                value={dbStatsKey}
+                onChange={e => setDbStatsKey(e.target.value)}
+                className="px-4 py-2 rounded-xl border-2 border-zinc-200 text-sm font-mono outline-none focus:border-blue-500 transition-all"
+              />
+              <button onClick={() => fetchDbStats()} disabled={isLoadingDb} className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center gap-2">
+                {isLoadingDb ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Database size={14} />}
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {dbError && <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 font-bold text-sm">{dbError}</div>}
+
+          {dbStats && (
+            <div className="space-y-8">
+              {/* Count Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {[
+                  { label: 'Citizens', value: dbStats.citizens, color: 'bg-blue-50 text-blue-700' },
+                  { label: 'Officers', value: dbStats.officers, color: 'bg-violet-50 text-violet-700' },
+                  { label: 'Pending Approval', value: dbStats.pendingOfficers, color: 'bg-amber-50 text-amber-700' },
+                  { label: 'Complaints', value: dbStats.complaints, color: 'bg-zinc-100 text-zinc-800' },
+                  { label: 'Resolved', value: dbStats.resolvedComplaints, color: 'bg-emerald-50 text-emerald-700' },
+                  { label: 'SLA Breached', value: dbStats.slaBreached, color: 'bg-red-50 text-red-700' },
+                  { label: 'Audit Logs', value: dbStats.auditLogs, color: 'bg-zinc-100 text-zinc-600' },
+                  { label: 'Feedback Sent', value: dbStats.feedbackTokens, color: 'bg-indigo-50 text-indigo-700' },
+                  { label: 'Feedback Done', value: dbStats.feedbackSubmitted, color: 'bg-emerald-50 text-emerald-600' },
+                  { label: 'Notifications', value: dbStats.notifications, color: 'bg-pink-50 text-pink-700' },
+                  { label: 'Vouchers', value: dbStats.vouchers, color: 'bg-amber-50 text-amber-600' },
+                  { label: 'Admins', value: dbStats.admins, color: 'bg-zinc-900 text-white' },
+                ].map((c, i) => (
+                  <div key={i} className={`p-4 rounded-2xl ${c.color} shadow-sm border border-white`}>
+                    <div className="text-2xl font-black">{c.value}</div>
+                    <div className="text-[9px] font-black uppercase tracking-widest mt-1 opacity-70">{c.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recent Users Table */}
+              <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] p-8 border border-white shadow-xl">
+                <h3 className="text-lg font-black uppercase tracking-tight text-zinc-900 mb-6 flex items-center gap-2"><Users size={18} className="text-blue-500" /> Recent Users (Officers & Admins)</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead><tr className="border-b border-zinc-100">
+                      {['ID','Name','Email','Role','Verified','Approved'].map(h => <th key={h} className="pb-3 px-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{h}</th>)}
+                    </tr></thead>
+                    <tbody className="divide-y divide-zinc-50">
+                      {dbStats.recentUsers?.map((u: any) => (
+                        <tr key={u.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{u.id}</td>
+                          <td className="py-3 px-3 font-bold text-zinc-900">{u.name}</td>
+                          <td className="py-3 px-3 text-zinc-600 text-xs">{u.email}</td>
+                          <td className="py-3 px-3"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${u.role === 'Admin' ? 'bg-zinc-900 text-white' : 'bg-violet-100 text-violet-700'}`}>{u.role}</span></td>
+                          <td className="py-3 px-3"><span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${u.isVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{u.isVerified ? 'Yes' : 'No'}</span></td>
+                          <td className="py-3 px-3"><span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${u.isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{u.isApproved ? 'Yes' : 'No'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Recent Complaints */}
+              <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] p-8 border border-white shadow-xl">
+                <h3 className="text-lg font-black uppercase tracking-tight text-zinc-900 mb-6 flex items-center gap-2"><FileText size={18} className="text-emerald-500" /> Recent Complaints</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead><tr className="border-b border-zinc-100">
+                      {['ID','Citizen','Category','Status','Priority','Filed On'].map(h => <th key={h} className="pb-3 px-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{h}</th>)}
+                    </tr></thead>
+                    <tbody className="divide-y divide-zinc-50">
+                      {dbStats.recentComplaints?.map((c: any) => (
+                        <tr key={c.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c.id}</td>
+                          <td className="py-3 px-3 font-bold text-zinc-900">{c.citizenName}</td>
+                          <td className="py-3 px-3 text-zinc-600 text-xs">{c.category}</td>
+                          <td className="py-3 px-3"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${c.status === 'Resolved' ? 'bg-emerald-100 text-emerald-700' : c.status === 'In Progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{c.status}</span></td>
+                          <td className="py-3 px-3 text-xs font-bold text-zinc-600">{c.priority}</td>
+                          <td className="py-3 px-3 text-xs text-zinc-500">{new Date(c.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Recent Citizens */}
+              <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] p-8 border border-white shadow-xl">
+                <h3 className="text-lg font-black uppercase tracking-tight text-zinc-900 mb-6 flex items-center gap-2"><Star size={18} className="text-amber-500" /> Recent Citizens</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead><tr className="border-b border-zinc-100">
+                      {['ID','Name','Email','Points','Complaints','Verified'].map(h => <th key={h} className="pb-3 px-3 text-[10px] font-black text-zinc-400 uppercase tracking-widest">{h}</th>)}
+                    </tr></thead>
+                    <tbody className="divide-y divide-zinc-50">
+                      {dbStats.recentCitizens?.map((c: any) => (
+                        <tr key={c.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c.id}</td>
+                          <td className="py-3 px-3 font-bold text-zinc-900">{c.name}</td>
+                          <td className="py-3 px-3 text-zinc-600 text-xs">{c.email}</td>
+                          <td className="py-3 px-3 font-black text-emerald-600">+{c.total_points}</td>
+                          <td className="py-3 px-3 text-zinc-700 font-bold">{c.total_complaints}</td>
+                          <td className="py-3 px-3"><span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${c.isVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{c.isVerified ? 'Yes' : 'No'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!dbStats && !isLoadingDb && !dbError && (
+            <div className="p-16 bg-white/60 rounded-[2.5rem] border border-white text-center shadow-xl">
+              <Database size={48} className="mx-auto text-zinc-300 mb-4" />
+              <p className="text-zinc-400 font-black uppercase tracking-widest text-sm">Click Refresh to load live database snapshot</p>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {isVoucherModalOpen && (

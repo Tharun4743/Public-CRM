@@ -26,5 +26,7 @@ services:
         value: meta-llama/llama-3.1-8b-instruct:free
       - key: JWT_SECRET
         generateValue: true
+      - key: ADMIN_DB_KEY
+        generateValue: true
       - key: ADMIN_EMAIL
         sync: false

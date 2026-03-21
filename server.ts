@@ -20,6 +20,7 @@ import reportsRoutes from "./server/routes/reportsRoutes.ts";
 import publicRoutes from "./server/routes/publicRoutes.ts";
 import slaRoutes from "./server/routes/slaRoutes.ts";
 import rewardsRoutes from "./server/routes/rewardsRoutes.ts";
+import dbStatsRoutes from "./server/routes/dbStatsRoutes.ts";
 import { initDb } from "./server/db/database.ts";
 import { auditLogger } from "./server/middleware/auditLogger.ts";
 import { slaService } from "./server/services/slaService.ts";
@@ -56,6 +57,7 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/settings/sla", slaRoutes);
 app.use("/api/rewards", rewardsRoutes);
+app.use("/api/admin/db-stats", dbStatsRoutes);
 
 import path from 'path';
 import { fileURLToPath } from 'url';
