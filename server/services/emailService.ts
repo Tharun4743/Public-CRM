@@ -3,21 +3,30 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Strip spaces from Gmail App Password (dotenv may include them if not quoted)
-const smtpPass = (process.env.SMTP_PASS || 'mock_password').replace(/\s/g, '');
+const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
+const smtpUser = process.env.SMTP_USER || '';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || 'mock_user@ethereal.email',
-    pass: smtpPass,
-  },
-});
+// Use Gmail service mode (more reliable on cloud servers than manual host/port)
+const createTransporter = () => {
+  if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false }
+    });
+  }
+  // Fallback: no real transporter (dev/log-only mode)
+  return null;
+};
 
 export const emailService = {
   sendVerificationEmail: async (email: string, code: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    console.log(`[EMAIL] Verification code for ${email}: ${code}`);
+    const transporter = createTransporter();
+    if (!transporter) {
+      throw new Error('SMTP not configured — email not sent');
+    }
+    const fromAddress = smtpUser;
     const mailOptions = {
       from: `"PS-CRM System" <${fromAddress}>`,
       to: email,
@@ -26,34 +35,26 @@ export const emailService = {
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
           <h2 style="color: #059669;">Verify Your Identity</h2>
           <p>Thank you for registering with the Smart Public Services CRM. Please use the following code to verify your email address:</p>
-          <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+          <div style="background: #f0fdf4; padding: 20px; border-radius: 12px; text-align: center; font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #065f46; margin: 20px 0; border: 2px solid #6ee7b7;">
             ${code}
           </div>
           <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">Secure, Transparent, and Citizen-Centric Governance.</p>
+          <p style="font-size: 12px; color: #6b7280;">Secure, Transparent, and Citizen-Centric Governance — Smart Public Services CRM</p>
         </div>
       `,
     };
-
-    try {
-      // In a real environment, this would send the email.
-      // For this demo, we'll log it to the console.
-      console.log(`[EMAIL] Verification code for ${email}: ${code}`);
-      
-      // Only attempt to send if credentials are provided
-      if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-        await transporter.sendMail(mailOptions);
-      }
-    } catch (error) {
-      console.error('Error sending verification email:', error);
-    }
+    // This will THROW if SMTP fails — caller handles the fallback
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] ✅ Verification email sent to ${email} — MessageId: ${info.messageId}`);
+    return info;
   },
 
   sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    const transporter = createTransporter();
+    if (!transporter) { console.log(`[EMAIL] Tracking code for ${email}: ${trackingCode}`); return; }
     const mailOptions = {
-      from: `"PS-CRM System" <${fromAddress}>`,
+      from: `"PS-CRM System" <${smtpUser}>`,
       to: email,
       subject: `Complaint Submitted - Tracking ID: ${trackingCode}`,
       html: `
@@ -73,22 +74,19 @@ export const emailService = {
 
     try {
       console.log(`[EMAIL] Tracking code for ${email}: ${trackingCode}`);
-      
-      if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-        await transporter.sendMail(mailOptions);
-      }
+      await transporter.sendMail(mailOptions);
     } catch (error) {
       console.error('Error sending tracking code email:', error);
     }
   },
 
   sendEscalationEmail: async (email: string, trackingCode: string, level: number, reason: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    const transporter = createTransporter();
+    if (!transporter) { console.warn(`[ESCALATION] Level ${level} for ${trackingCode}`); return; }
     const levelLabel = level === 1 ? 'Department Head' : level === 2 ? 'Senior Administration' : 'Commissioner Office';
     const alertLevel = level === 3 ? 'CRITICAL BREACH' : 'HIGH PRIORITY ESCALATION';
-
     const mailOptions = {
-        from: `"PS-CRM System" <${fromAddress}>`,
+        from: `"PS-CRM System" <${smtpUser}>`,
         to: email,
         subject: `[${alertLevel}] Escalation Level ${level} - ${trackingCode}`,
         html: `
@@ -120,18 +118,17 @@ export const emailService = {
 
     try {
         console.warn(`[ESCALATION] Alert for Level ${level} sent to ${email} for ${trackingCode}`);
-        if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-            await transporter.sendMail(mailOptions);
-        }
+        await transporter.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending escalation email:', error);
     }
   },
 
   sendResolutionEmail: async (email: string, trackingCode: string, notes: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    const transporter = createTransporter();
+    if (!transporter) { console.log(`[EMAIL] Resolution for ${email}: ${trackingCode}`); return; }
     const mailOptions = {
-        from: `"PS-CRM System" <${fromAddress}>`,
+        from: `"PS-CRM System" <${smtpUser}>`,
         to: email,
         subject: `Complaint Resolved - Tracking ID: ${trackingCode}`,
         html: `
@@ -152,19 +149,19 @@ export const emailService = {
 
     try {
         console.log(`[EMAIL] Resolution notification sent to ${email} for ${trackingCode}`);
-        if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-            await transporter.sendMail(mailOptions);
-        }
+        await transporter.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending resolution email:', error);
     }
   },
 
   sendFeedbackEmail: async (email: string, trackingCode: string, token: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
-    const feedbackUrl = `http://localhost:5173/feedback?token=${token}`;
+    const transporter = createTransporter();
+    if (!transporter) { console.log(`[EMAIL] Feedback token for ${email}: ${token}`); return; }
+    const appUrl = process.env.APP_URL || 'https://ps-crm-995a.onrender.com';
+    const feedbackUrl = `${appUrl}/feedback?token=${token}`;
     const mailOptions = {
-        from: `"PS-CRM System" <${fromAddress}>`,
+        from: `"PS-CRM System" <${smtpUser}>`,
         to: email,
         subject: `How did we do? - Feedback Request: ${trackingCode}`,
         html: `
@@ -183,21 +180,18 @@ export const emailService = {
 
     try {
         console.log(`[EMAIL] Feedback link for ${email}: ${feedbackUrl}`);
-        if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-            const info = await transporter.sendMail(mailOptions);
-            if (info) {
-               console.log(`📬 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
-            }
-        }
+        const info = await transporter.sendMail(mailOptions);
+        if (info) console.log(`📬 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
     } catch (error) {
         console.error('Error sending feedback email:', error);
     }
   },
 
   sendApologyEmail: async (email: string, trackingCode: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    const transporter = createTransporter();
+    if (!transporter) { console.warn(`[EMAIL] Apology for ${email}: ${trackingCode}`); return; }
     const mailOptions = {
-        from: `"PS-CRM System" <${fromAddress}>`,
+        from: `"PS-CRM System" <${smtpUser}>`,
         to: email,
         subject: `[Re-Opened] Deepest Apologies regarding Grievance ${trackingCode}`,
         html: `
@@ -217,18 +211,17 @@ export const emailService = {
 
     try {
         console.warn(`[EMAIL] Re-opening apology sent to ${email} for ${trackingCode}`);
-        if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-            await transporter.sendMail(mailOptions);
-        }
+        await transporter.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending apology email:', error);
     }
   },
 
   sendVoucherEmail: async (email: string, title: string, code: string) => {
-    const fromAddress = process.env.SMTP_USER || 'noreply@ps-crm.gov';
+    const transporter = createTransporter();
+    if (!transporter) { console.log(`[EMAIL] Voucher ${code} for ${email}`); return; }
     const mailOptions = {
-        from: `"PS-CRM Rewards" <${fromAddress}>`,
+        from: `"PS-CRM Rewards" <${smtpUser}>`,
         to: email,
         subject: `Your Reward is Here! - ${title}`,
         html: `
@@ -259,9 +252,7 @@ export const emailService = {
 
     try {
         console.log(`[EMAIL] Voucher ${code} sent to ${email}`);
-        if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user@ethereal.email') {
-            await transporter.sendMail(mailOptions);
-        }
+        await transporter.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending voucher email:', error);
     }
