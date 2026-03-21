@@ -15,6 +15,12 @@ export const CitizenLogin = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
+  // Forgot password states
+  const [forgotStep, setForgotStep] = useState<null | 'email' | 'reset'>(null);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [forgotDevCode, setForgotDevCode] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -134,6 +140,83 @@ export const CitizenLogin = () => {
 
   const inputClass = "w-full pl-12 pr-12 py-3.5 rounded-xl border-2 border-zinc-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 bg-zinc-50/50 outline-none transition-all text-base text-zinc-900 font-medium placeholder:text-zinc-400";
   const labelClass = "text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 block ml-1";
+
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true); setError(null); setSuccessMessage(null);
+    try {
+      const res = await fetch('/api/citizens/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmail }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setSuccessMessage(data.message);
+      if (data.devCode) { setForgotDevCode(data.devCode); setForgotCode(data.devCode); }
+      setForgotStep('reset');
+    } catch (err: any) { setError(err.message); }
+    finally { setIsLoading(false); }
+  };
+
+  const handleForgotReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true); setError(null);
+    try {
+      const res = await fetch('/api/citizens/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmail, code: forgotCode, newPassword }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setSuccessMessage(data.message);
+      setTimeout(() => { setForgotStep(null); setIsLogin(true); setSuccessMessage(null); }, 2000);
+    } catch (err: any) { setError(err.message); }
+    finally { setIsLoading(false); }
+  };
+
+  // ── Forgot Password Flow ──────────────────────────────────────────
+  if (forgotStep) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-20 relative overflow-hidden">
+        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-amber-500/10 blur-[100px] rounded-full" />
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md w-full bg-white p-10 rounded-[2.5rem] border border-zinc-200 shadow-2xl relative z-10">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-6 text-4xl">🔐</div>
+            <h2 className="text-3xl font-black text-zinc-950 tracking-tight leading-none mb-3">{forgotStep === 'email' ? 'Forgot Password' : 'Reset Password'}</h2>
+            <p className="text-zinc-500 text-sm">{forgotStep === 'email' ? 'Enter your registered email to receive an OTP.' : `Enter the OTP sent to ${forgotEmail} and your new password.`}</p>
+          </div>
+          {error && <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-700 text-xs font-black uppercase tracking-widest flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
+          {successMessage && <div className="mb-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 text-xs font-black uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16} />{successMessage}</div>}
+          {forgotDevCode && (
+            <div className="mb-5 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl text-center">
+              <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">⚠️ Email failed — Use this OTP</p>
+              <div className="text-3xl font-black text-amber-900 tracking-[0.5rem] font-mono">{forgotDevCode}</div>
+            </div>
+          )}
+          {forgotStep === 'email' ? (
+            <form onSubmit={handleForgotRequest} className="space-y-6">
+              <div className="space-y-2">
+                <label className={labelClass}><Mail size={12} className="inline mr-1" />Registered Email</label>
+                <div className="relative"><Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" /><input required type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} className={inputClass} placeholder="your@email.com" /></div>
+              </div>
+              <button disabled={isLoading} type="submit" className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50">
+                {isLoading ? 'Sending OTP...' : 'Send Reset OTP →'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleForgotReset} className="space-y-5">
+              <div className="space-y-2">
+                <label className={labelClass}>OTP Code</label>
+                <input required type="text" maxLength={6} value={forgotCode} onChange={e => setForgotCode(e.target.value)} className="w-full px-6 py-4 rounded-2xl border-2 border-zinc-200 focus:border-amber-500 bg-zinc-50 outline-none text-2xl text-center font-black tracking-[0.8rem]" placeholder="000000" />
+              </div>
+              <div className="space-y-2">
+                <label className={labelClass}><Lock size={12} className="inline mr-1" />New Password</label>
+                <div className="relative"><Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" /><input required type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="New password (min 6 chars)" minLength={6} /></div>
+              </div>
+              <button disabled={isLoading} type="submit" className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all disabled:opacity-50">
+                {isLoading ? 'Resetting...' : 'Reset Password →'}
+              </button>
+            </form>
+          )}
+          <button onClick={() => { setForgotStep(null); setError(null); setSuccessMessage(null); setForgotDevCode(null); }} className="w-full mt-6 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors">← Back to Login</button>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (isVerifying) {
     return (
@@ -347,7 +430,18 @@ export const CitizenLogin = () => {
               )}
 
               <div className="space-y-2">
-                <label className={labelClass}>PASSWORD</label>
+                <div className="flex justify-between items-center">
+                  <label className={labelClass}>PASSWORD</label>
+                  {isLogin && (
+                    <button
+                      type="button"
+                      onClick={() => setForgotStep('email')}
+                      className="text-[9px] font-black text-emerald-600 uppercase tracking-widest hover:underline mb-2"
+                    >
+                      Forgot Password?
+                    </button>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
                   <input

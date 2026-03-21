@@ -117,4 +117,40 @@ router.post('/my-complaints/:id/reopen', requireCitizenAuth, async (req: Authent
   res.json({ ok: true });
 });
 
+// ── Forgot Password ──────────────────────────────────────────────────────────
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  const citizen = db.prepare('SELECT * FROM citizens WHERE LOWER(email)=LOWER(?)').get(email) as any;
+  if (!citizen) return res.status(404).json({ message: 'No account found with this email' });
+
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+  db.prepare('UPDATE citizens SET verificationCode = ? WHERE id = ?').run(resetCode, citizen.id);
+  console.log(`[OTP] Forgot-password OTP for citizen ${email}: ${resetCode}`);
+
+  let emailSent = false;
+  let devCode: string | undefined;
+  try {
+    await emailService.sendForgotPasswordEmail(email, resetCode, 'Citizen');
+    emailSent = true;
+  } catch (err) {
+    console.error('[OTP] Forgot-password email failed:', err);
+    devCode = resetCode;
+  }
+  res.json({
+    message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
+    ...(devCode ? { devCode } : {})
+  });
+});
+
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
+  const citizen = db.prepare('SELECT * FROM citizens WHERE LOWER(email)=LOWER(?)').get(email) as any;
+  if (!citizen || citizen.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
+  const hash = await bcrypt.hash(newPassword, 10);
+  db.prepare('UPDATE citizens SET password_hash = ?, verificationCode = NULL WHERE id = ?').run(hash, citizen.id);
+  res.json({ message: 'Password reset successfully. Please login.' });
+});
+
 export default router;

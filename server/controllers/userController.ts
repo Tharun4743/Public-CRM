@@ -155,5 +155,50 @@ export const userController = {
       console.error('Error fetching pending officers:', error);
       res.status(500).json({ message: "Error fetching pending officers" });
     }
+  },
+
+  forgotPassword: async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: 'Email is required' });
+      const db = (await import('../db/database.ts')).default;
+      const user = db.prepare('SELECT * FROM users WHERE LOWER(email)=LOWER(?)').get(email) as any;
+      if (!user) return res.status(404).json({ message: 'No account found with this email' });
+
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      db.prepare('UPDATE users SET verificationCode = ? WHERE id = ?').run(resetCode, user.id);
+      console.log(`[OTP] Forgot-password OTP for ${user.role} ${email}: ${resetCode}`);
+
+      let emailSent = false;
+      let devCode: string | undefined;
+      try {
+        await emailService.sendForgotPasswordEmail(email, resetCode, user.role as any);
+        emailSent = true;
+      } catch (err) {
+        console.error('[OTP] Forgot-password email failed:', err);
+        devCode = resetCode;
+      }
+      res.json({
+        message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
+        ...(devCode ? { devCode } : {})
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Error sending reset email' });
+    }
+  },
+
+  resetPassword: async (req: Request, res: Response) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
+      const db = (await import('../db/database.ts')).default;
+      const user = db.prepare('SELECT * FROM users WHERE LOWER(email)=LOWER(?)').get(email) as any;
+      if (!user || user.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
+      // Store plain for now (hash on next login upgrade)
+      db.prepare('UPDATE users SET password = ?, verificationCode = NULL WHERE id = ?').run(newPassword, user.id);
+      res.json({ message: 'Password reset successfully. Please login.' });
+    } catch (error) {
+      res.status(500).json({ message: 'Error resetting password' });
+    }
   }
 };

@@ -91,6 +91,11 @@ export const complaintController = {
       if (!complaint) {
         return res.status(404).json({ message: "Complaint not found" });
       }
+      // Notify citizen via email
+      const targetEmail = (complaint as any).contactInfo;
+      if (targetEmail && targetEmail.includes('@')) {
+        emailService.sendStatusUpdateEmail(targetEmail, (complaint as any).id, 'In Progress', department);
+      }
       res.json(complaint);
     } catch (error) {
       res.status(500).json({ message: "Error assigning complaint" });
@@ -103,6 +108,11 @@ export const complaintController = {
       const complaint = await complaintService.updateStatus(req.params.id, status as ComplaintStatus);
       if (!complaint) {
         return res.status(404).json({ message: "Complaint not found" });
+      }
+      // Notify citizen on meaningful status changes
+      const targetEmail = (complaint as any).contactInfo;
+      if (targetEmail && targetEmail.includes('@') && ['In Progress', 'Escalated', 'Closed'].includes(status)) {
+        emailService.sendStatusUpdateEmail(targetEmail, (complaint as any).id, status);
       }
       res.json(complaint);
     } catch (error) {

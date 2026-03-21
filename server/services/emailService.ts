@@ -256,5 +256,65 @@ export const emailService = {
     } catch (error) {
         console.error('Error sending voucher email:', error);
     }
+  },
+
+  sendForgotPasswordEmail: async (email: string, code: string, role: 'Citizen' | 'Officer' | 'Admin' = 'Citizen') => {
+    console.log(`[OTP] Forgot-password OTP for ${email} (${role}): ${code}`);
+    const transporter = createTransporter();
+    if (!transporter) throw new Error('SMTP not configured');
+    const mailOptions = {
+      from: `"PS-CRM Security" <${smtpUser}>`,
+      to: email,
+      subject: 'Password Reset OTP - Smart Public Services CRM',
+      html: `
+        <div style="font-family:sans-serif;padding:30px;border:2px solid #fef9c3;border-radius:16px;max-width:600px;margin:auto;background:#fffdf0;">
+          <h2 style="color:#92400e;margin-bottom:8px;">🔐 Password Reset Request</h2>
+          <p style="color:#374151;font-size:15px;">We received a request to reset your <strong>${role}</strong> account password. Use the code below:</p>
+          <div style="background:#fff7ed;border:2px solid #fed7aa;padding:24px;border-radius:12px;text-align:center;margin:24px 0;">
+            <span style="font-size:11px;font-weight:bold;color:#9a3412;text-transform:uppercase;letter-spacing:3px;">Your OTP Code</span>
+            <div style="font-size:40px;font-weight:900;color:#7c2d12;letter-spacing:12px;font-family:monospace;margin:12px 0;">${code}</div>
+            <span style="font-size:12px;color:#92400e;">Valid for 10 minutes only</span>
+          </div>
+          <p style="font-size:13px;color:#6b7280;">If you did not request this, please ignore this email. Your password will not change.</p>
+          <hr style="border:none;border-top:1px solid #fde68a;margin:24px 0;" />
+          <p style="font-size:11px;color:#9ca3af;text-align:center;">Smart Public Services CRM — Secure Password Recovery System</p>
+        </div>
+      `,
+    };
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] ✅ Password reset OTP sent to ${email} — MessageId: ${info.messageId}`);
+    return info;
+  },
+
+  sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string, department?: string) => {
+    const transporter = createTransporter();
+    if (!transporter) { console.log(`[EMAIL] Status update for ${email}: ${trackingCode} → ${newStatus}`); return; }
+    const statusColor = newStatus === 'In Progress' ? '#2563eb' : newStatus === 'Resolved' ? '#059669' : newStatus === 'Escalated' ? '#dc2626' : '#6b7280';
+    const statusEmoji = newStatus === 'In Progress' ? '⚙️' : newStatus === 'Resolved' ? '✅' : newStatus === 'Escalated' ? '🚨' : '📋';
+    const mailOptions = {
+      from: `"PS-CRM Updates" <${smtpUser}>`,
+      to: email,
+      subject: `${statusEmoji} Complaint Update: ${newStatus} — ${trackingCode}`,
+      html: `
+        <div style="font-family:sans-serif;padding:30px;border:1px solid #e5e7eb;border-radius:16px;max-width:600px;margin:auto;background:#fff;">
+          <h2 style="color:#111827;margin-bottom:8px;">${statusEmoji} Complaint Status Updated</h2>
+          <p style="color:#4b5563;font-size:15px;line-height:1.6;">Your complaint <strong style="color:#111827;">${trackingCode}</strong> has been updated to a new status:</p>
+          <div style="background:#f9fafb;border-left:4px solid ${statusColor};padding:16px 20px;border-radius:8px;margin:24px 0;">
+            <span style="font-size:11px;font-weight:bold;color:#9ca3af;text-transform:uppercase;letter-spacing:2px;">New Status</span>
+            <div style="font-size:22px;font-weight:900;color:${statusColor};margin-top:6px;">${newStatus}</div>
+            ${department ? `<div style="font-size:13px;color:#6b7280;margin-top:8px;">Assigned Department: <strong>${department}</strong></div>` : ''}
+          </div>
+          <p style="font-size:13px;color:#6b7280;">You can track your complaint progress anytime using your Tracking ID on our portal.</p>
+          <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0;" />
+          <p style="font-size:11px;color:#9ca3af;text-align:center;">Smart Public Services CRM — Citizen Notification System</p>
+        </div>
+      `,
+    };
+    try {
+      console.log(`[EMAIL] Status update sent to ${email}: ${trackingCode} → ${newStatus}`);
+      await transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error sending status update email:', error);
+    }
   }
 };
