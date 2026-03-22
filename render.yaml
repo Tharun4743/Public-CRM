@@ -4,12 +4,38 @@ services:
     runtime: node
     region: singapore
     plan: free
-    buildCommand: echo "Skipping build for test"
-    startCommand: node test-server.js
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
-    healthCheckGracePeriod: 30
+    healthCheckGracePeriod: 60
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      - key: APP_URL
+        value: https://ps-crm-995a.onrender.com
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        value: teamgoatvsb@gmail.com
+      - key: SMTP_PASS
+        value: eagcxyhjthuywdrk
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: meta-llama/llama-3.1-8b-instruct:free
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_DB_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
+      - key: OLLAMA_URL
+        value: "http://localhost:11434"
