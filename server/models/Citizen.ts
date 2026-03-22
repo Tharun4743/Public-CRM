@@ -12,14 +12,15 @@ export interface ICitizen extends Document {
     badges: string[];
     isVerified: boolean;
     verificationCode?: string;
+    verificationExpiry?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
 
 const CitizenSchema = new Schema<ICitizen>({
     name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
-    phone: { type: String },
+    email: { type: String, unique: true, required: true, lowercase: true, trim: true },
+    phone: { type: String, trim: true },
     password_hash: { type: String, required: true },
     ward: { type: String },
     address: { type: String },
@@ -28,6 +29,7 @@ const CitizenSchema = new Schema<ICitizen>({
     badges: { type: [String], default: [] },
     isVerified: { type: Boolean, default: false },
     verificationCode: { type: String },
+    verificationExpiry: { type: Date }
 }, { timestamps: true });
 
 export const Citizen = mongoose.model<ICitizen>('Citizen', CitizenSchema);

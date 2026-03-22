@@ -5,13 +5,15 @@ export const userService = {
   register: async (userData: Omit<UserType, 'id'>): Promise<any> => {
     const isVerified = userData.role === UserRole.ADMIN;
     const isApproved = userData.role === UserRole.ADMIN;
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = userData.verificationCode || Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationExpiry = userData.verificationExpiry || new Date(Date.now() + 5 * 60 * 1000);
 
     const user = await User.create({
       ...userData,
       isVerified,
       isApproved,
-      verificationCode
+      verificationCode,
+      verificationExpiry
     });
 
     return user.toObject();

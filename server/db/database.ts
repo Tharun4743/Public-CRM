@@ -47,7 +47,7 @@ const initSeedData = async () => {
         if (adminCount === 0) {
             console.log('Creating default admin user...');
             const bcrypt = await import("bcryptjs");
-            const hashedPassword = await bcrypt.hash('admin123', 8);
+            const hashedPassword = await bcrypt.hash('admin123', 10);
             await User.create({
                 name: 'System Admin',
                 email: 'admin@ps-crm.gov',

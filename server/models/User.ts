@@ -8,6 +8,7 @@ export interface IUser extends Document {
     department?: string;
     isVerified: boolean;
     verificationCode?: string;
+    verificationExpiry?: Date;
     isApproved: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -15,12 +16,13 @@ export interface IUser extends Document {
 
 const UserSchema = new Schema<IUser>({
     name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
+    email: { type: String, unique: true, required: true, lowercase: true, trim: true },
     password: { type: String },
     role: { type: String, required: true },
     department: { type: String },
     isVerified: { type: Boolean, default: false },
     verificationCode: { type: String },
+    verificationExpiry: { type: Date },
     isApproved: { type: Boolean, default: false }
 }, { timestamps: true });
 

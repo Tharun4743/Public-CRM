@@ -3,154 +3,166 @@ import { userService } from "../services/userService.ts";
 import { emailService } from "../services/emailService.ts";
 import { UserRole } from "../../src/types.ts";
 import { User } from "../models/User.ts";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
 
 export const userController = {
+  // -------------------------------------------------------------------------
+  // 1. STAFF REGISTRATION (Normalization + Proper Password Hashing)
+  // -------------------------------------------------------------------------
   register: async (req: Request, res: Response) => {
+    let verificationCode = '';
     try {
-      const { name, email, password, role, department } = req.body;
+      const email = req.body.email?.toLowerCase().trim();
+      const { name, password, role, department } = req.body;
       
       if (!name || !email || !password || !role) {
-        return res.status(400).json({ message: "Missing required fields" });
+        return res.status(400).json({ message: "Missing Name, Email, Password, or Role" });
       }
 
+      // 2. DUPLICATE CHECK
       const existingUser = await userService.findByEmail(email);
       if (existingUser) {
-        return res.status(409).json({ message: "User with this email already exists" });
+        return res.status(409).json({ message: "An account with this email already exists." });
       }
 
+      // Security check for Admin role
       if (role === UserRole.ADMIN && password !== "@Nammatha") {
         return res.status(403).json({ message: "Invalid Admin authorization password" });
       }
 
-      // Important: Only encrypt the actual password storage, leave Admin init as is to not break current tests if applicable.
-      // We will hash all passwords for Users here
-      const bcrypt = await import("bcryptjs");
       const hashedPassword = await bcrypt.hash(password, 8);
+      verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const verificationExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 Mins
 
       const user = await userService.register({
         name,
         email,
         password: hashedPassword,
         role: role as UserRole,
-        department
+        department,
+        verificationCode,
+        verificationExpiry
       });
 
+      // Email Dispatch
       let emailSent = false;
-      if (user.verificationCode) {
-        const emailRes = await emailService.sendVerificationEmail(email, user.verificationCode);
+      try {
+        const emailRes = await emailService.sendVerificationEmail(email, verificationCode);
         emailSent = emailRes.success;
+      } catch (err) {
+        console.error('[AUTH] Staff Registration email failed:', err);
       }
 
-      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
+      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = (user as any).toObject ? (user as any).toObject() : user;
       res.status(201).json({
         ...userWithoutSensitiveData,
-        message: emailSent ? "Verification code sent to your email. Please verify to complete registration." : `Email delivery failed. Use this registration code: ${user.verificationCode}`,
-        ...(emailSent ? {} : { devCode: user.verificationCode })
+        message: emailSent ? "Verification code sent to your email." : `Registration successful, but email failed. Code: ${verificationCode}`,
+        ...(emailSent ? {} : { devCode: verificationCode })
       });
-    } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({ message: "Error during registration" });
+    } catch (error: any) {
+      if (error.code === 11000) return res.status(409).json({ message: "Email already exists." });
+      res.status(500).json({ message: "Internal server error during registration." });
     }
   },
 
+  // -------------------------------------------------------------------------
+  // 2. VERIFICATION & RESEND (5-Min Expiry Support)
+  // -------------------------------------------------------------------------
   verifyEmail: async (req: Request, res: Response) => {
     try {
-      const { email, code } = req.body;
-      if (!email || !code) {
-        return res.status(400).json({ message: "Email and verification code are required" });
+      const email = req.body.email?.toLowerCase().trim();
+      const { code } = req.body;
+      if (!email || !code) return res.status(400).json({ message: "Email and code required" });
+
+      const user = await User.findOne({ email });
+      if (!user || user.verificationCode !== code) return res.status(400).json({ message: "Invalid verification code" });
+
+      if (user.verificationExpiry && user.verificationExpiry < new Date()) {
+          return res.status(400).json({ message: "Verification code has expired." });
       }
 
-      const isVerified = await userService.verifyUser(email, code);
-      if (isVerified) {
-        res.status(200).json({ message: "Email verified successfully. You can now log in." });
-      } else {
-        res.status(400).json({ message: "Invalid or expired verification code" });
-      }
+      user.isVerified = true;
+      user.verificationCode = undefined;
+      user.verificationExpiry = undefined;
+      await user.save();
+
+      res.status(200).json({ message: "Email verified. You can now log in." });
     } catch (error) {
-      console.error('Verification error:', error);
-      res.status(500).json({ message: "Error during verification" });
+      res.status(500).json({ message: "Verification failed." });
     }
   },
 
   resendCode: async (req: Request, res: Response) => {
     try {
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
+      const email = req.body.email?.toLowerCase().trim();
+      if (!email) return res.status(400).json({ message: "Email is required" });
 
-      const user = await userService.findByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      if (user.isVerified) {
-        return res.status(400).json({ message: "User is already verified" });
-      }
+      const user = await User.findOne({ email });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (user.isVerified) return res.status(400).json({ message: "Already verified" });
 
       const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await userService.updateVerificationCode(email, newCode);
+      user.verificationCode = newCode;
+      user.verificationExpiry = new Date(Date.now() + 5 * 60 * 1000);
+      await user.save();
       
-      await emailService.sendVerificationEmail(email, newCode);
-
-      res.status(200).json({ message: "New verification code sent to your email." });
+      const emailRes = await emailService.sendVerificationEmail(email, newCode);
+      res.status(200).json({ 
+          message: emailRes.success ? "New code sent to your email." : `Email failed. Use code: ${newCode}`,
+          ...(emailRes.success ? {} : { devCode: newCode })
+      });
     } catch (error) {
-      console.error('Resend code error:', error);
-      res.status(500).json({ message: "Error resending verification code" });
+      res.status(500).json({ message: "Resend failed." });
     }
   },
 
+  // -------------------------------------------------------------------------
+  // 3. LOGIN (Normalization + Legacy Support removed for strict production)
+  // -------------------------------------------------------------------------
   login: async (req: Request, res: Response) => {
     try {
-      const { email, password, role } = req.body;
-      const user = await userService.findByEmail(email);
-      const bcrypt = await import("bcryptjs");
+      const email = req.body.email?.toLowerCase().trim();
+      const { password, role } = req.body;
       
-      const isValid = user ? await bcrypt.compare(password, user.password) : false;
+      const user = await User.findOne({ email });
+      if (!user) return res.status(401).json({ message: "Invalid email or password." });
 
-      // Handle raw passwords from before the change for edge test cases if any exist 
-      // (or if Admin is hardcoded without bcrypt in DB). By comparing directly if bcrypt fails.
-      const isLegacyValid = user && user.password === password;
-
-      if (!user || (!isValid && !isLegacyValid) || user.role !== role) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
+      const isValid = await bcrypt.compare(password, user.password || '');
+      if (!isValid || user.role !== role) return res.status(401).json({ message: "Invalid credentials." });
 
       if (user.isVerified === false) {
-        console.log(`[LOGIN] User not verified: ${email}. Attempting to resend OTP...`);
         const newCode = Math.floor(100000 + Math.random() * 900000).toString();
         user.verificationCode = newCode;
+        user.verificationExpiry = new Date(Date.now() + 5 * 60 * 1000);
         await user.save();
         
-        let emailResent = false;
-        try {
-          const resendRes = await emailService.sendVerificationEmail(email, newCode);
-          emailResent = resendRes.success;
-        } catch (e) {
-          console.error('[LOGIN] OTP Resend failed:', e);
-        }
-
+        const emailRes = await emailService.sendVerificationEmail(email, newCode);
         return res.status(403).json({ 
-          message: emailResent ? "Email not verified. A new verification code has been sent." : `Email failed. Use this code: ${newCode}`,
+          message: emailRes.success ? "Email not verified. A new code was sent." : `Not verified. Email failed. Code: ${newCode}`,
           needsVerification: true,
-          ...(emailResent ? {} : { devCode: newCode })
+          ...(emailRes.success ? {} : { devCode: newCode })
         });
       }
 
       if (user.role === UserRole.OFFICER && !user.isApproved) {
-        return res.status(403).json({ 
-          message: "Your account is pending Admin approval. You will gain access once an Admin approves your registration."
-        });
+        return res.status(403).json({ message: "Pending Admin approval." });
       }
 
-      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
-      res.status(200).json(userWithoutSensitiveData);
+      const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = (user as any).toObject ? (user as any).toObject() : user;
+
+      res.status(200).json({ ...userWithoutSensitiveData, token });
     } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ message: "Error during login" });
+      res.status(500).json({ message: "Login failed." });
     }
   },
 
+  // -------------------------------------------------------------------------
+  // 4. ADMIN ACTIONS (Approve Officer)
+  // -------------------------------------------------------------------------
   approveOfficer: async (req: Request, res: Response) => {
     try {
       const { officerId } = req.body;
@@ -159,8 +171,7 @@ export const userController = {
       await User.findByIdAndUpdate(officerId, { isApproved: true });
       res.json({ message: "Officer approved successfully" });
     } catch (error) {
-      console.error('Approval error:', error);
-      res.status(500).json({ message: "Error approving officer" });
+      res.status(500).json({ message: "Approval failed." });
     }
   },
 
@@ -169,58 +180,57 @@ export const userController = {
       const officers = await User.find({ role: 'Officer', isApproved: false }).lean();
       res.json(officers);
     } catch (error) {
-      console.error('Error fetching pending officers:', error);
-      res.status(500).json({ message: "Error fetching pending officers" });
+      res.status(500).json({ message: "Error fetching pending officers." });
     }
   },
 
+  // -------------------------------------------------------------------------
+  // 5. STAFF RECOVERY
+  // -------------------------------------------------------------------------
   forgotPassword: async (req: Request, res: Response) => {
+    let resetCode = '';
     try {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ message: 'Email is required' });
+      const email = req.body.email?.toLowerCase().trim();
+      if (!email) return res.status(400).json({ message: 'Email required' });
      
-      const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
-      if (!user) return res.status(404).json({ message: 'No account found with this email' });
+      const user = await User.findOne({ email });
+      if (!user) return res.status(404).json({ message: 'Email not found' });
 
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      resetCode = Math.floor(100000 + Math.random() * 900000).toString();
       user.verificationCode = resetCode;
+      user.verificationExpiry = new Date(Date.now() + 5 * 60 * 1000);
       await user.save();
 
-      let emailSent = false;
-      try {
-        const resetRes = await emailService.sendForgotPasswordEmail(email, resetCode, user.role as any);
-        emailSent = resetRes.success;
-      } catch (err) {
-        console.error('[OTP] Forgot-password email failed:', err);
-      }
-
-      const devCode = emailSent ? undefined : resetCode;
+      const emailRes = await emailService.sendForgotPasswordEmail(email, resetCode, user.role as any);
       res.json({
-        message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
-        ...(devCode ? { devCode } : {})
+        message: emailRes.success ? 'Recovery code sent.' : `Email failed. Code: ${resetCode}`,
+        ...(emailRes.success ? {} : { devCode: resetCode })
       });
     } catch (error) {
-      res.status(500).json({ message: 'Error sending reset email' });
+      res.status(500).json({ message: 'Recovery error.', devCode: resetCode || undefined });
     }
   },
 
   resetPassword: async (req: Request, res: Response) => {
     try {
-      const { email, code, newPassword } = req.body;
-      if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
+      const email = req.body.email?.toLowerCase().trim();
+      const { code, newPassword } = req.body;
+      if (!email || !code || !newPassword) return res.status(400).json({ message: 'Missing fields' });
       
-      const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
-      if (!user || user.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
+      const user = await User.findOne({ email });
+      if (!user || user.verificationCode !== code) return res.status(400).json({ message: 'Invalid code' });
 
-      const bcrypt = await import("bcryptjs");
-      const hashedPassword = await bcrypt.hash(newPassword, 8);
-      
-      user.password = hashedPassword;
+      if (user.verificationExpiry && user.verificationExpiry < new Date()) {
+          return res.status(400).json({ message: "OTP expired." });
+      }
+
+      user.password = await bcrypt.hash(newPassword, 8);
       user.verificationCode = undefined;
+      user.verificationExpiry = undefined;
       await user.save();
-      res.json({ message: 'Password reset successfully. Please login.' });
+      res.json({ message: 'Password reset successfully.' });
     } catch (error) {
-      res.status(500).json({ message: 'Error resetting password' });
+      res.status(500).json({ message: 'Reset failed.' });
     }
   }
 };

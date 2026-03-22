@@ -67,5 +67,6 @@ export interface User {
   department?: string; // For officers
   isVerified?: boolean;
   verificationCode?: string;
+  verificationExpiry?: string | Date;
   isApproved?: boolean;
 }
