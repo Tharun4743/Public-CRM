@@ -61,17 +61,26 @@ export const AdminDashboard = () => {
 
   const [leaderboard, setLeaderboard] = React.useState<any[]>([]);
   const [redeemedVouchers, setRedeemedVouchers] = React.useState<any[]>([]);
+  const [rewardsPage, setRewardsPage] = React.useState(1);
+  const rewardsPerPage = 5;
+  const paginatedVouchers = Array.isArray(redeemedVouchers) 
+    ? redeemedVouchers.slice((rewardsPage - 1) * rewardsPerPage, rewardsPage * rewardsPerPage)
+    : [];
+  const totalRewardsPages = Array.isArray(redeemedVouchers) 
+    ? Math.ceil(redeemedVouchers.length / rewardsPerPage) || 1
+    : 1;
   const [voucherTypes, setVoucherTypes] = React.useState<any[]>([]);
   const [isVoucherModalOpen, setIsVoucherModalOpen] = React.useState(false);
   const [newVoucher, setNewVoucher] = React.useState({ title: '', description: '', points_required: 0, total_available: 0 });
 
   const fetchPendingOfficers = async () => {
     try {
-      const res = await fetch('/api/users/pending-officers');
+      const res = await fetch('/api/users/pending-officers', { headers: getAuthHeaders() });
       const data = await res.json();
-      setPendingOfficers(data);
+      setPendingOfficers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching pending officers:', err);
+      setPendingOfficers([]);
     }
   };
 
@@ -79,7 +88,7 @@ export const AdminDashboard = () => {
     try {
       await fetch('/api/users/approve-officer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ officerId: id })
       });
       fetchPendingOfficers();
@@ -110,30 +119,35 @@ export const AdminDashboard = () => {
         ...auditFilters,
         page: auditFilters.page.toString()
       });
-      const res = await fetch(`/api/audit?${qp}`);
+      const res = await fetch(`/api/audit?${qp}`, { headers: getAuthHeaders() });
       const data = await res.json();
-      setAuditLogs(data.logs);
-      setAuditTotalPages(data.totalPages);
-    } catch (err) {}
+      setAuditLogs(Array.isArray(data.logs) ? data.logs : []);
+      setAuditTotalPages(data.totalPages || 1);
+    } catch (err) {
+      console.error('Error fetching audit logs:', err);
+      setAuditLogs([]);
+    }
   };
 
   const fetchActiveAnomalies = async () => {
     try {
-      const res = await fetch('/api/anomalies/active');
+      const res = await fetch('/api/anomalies/active', { headers: getAuthHeaders() });
       const data = await res.json();
-      setActiveAnomalies(data);
+      setActiveAnomalies(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching anomalies:', err);
+      setActiveAnomalies([]);
     }
   };
 
   const fetchSlaStats = async () => {
     try {
-      const res = await fetch('/api/complaints/sla-stats');
+      const res = await fetch('/api/complaints/sla-stats', { headers: getAuthHeaders() });
       const data = await res.json();
-      setSlaStats(data);
+      setSlaStats(data || { onTrack: 0, atRisk: 0, breached: 0, escalated: 0 });
     } catch (err) {
       console.error('Error fetching SLA stats:', err);
+      setSlaStats({ onTrack: 0, atRisk: 0, breached: 0, escalated: 0 });
     }
   };
 
@@ -142,7 +156,7 @@ export const AdminDashboard = () => {
     try {
       const response = await fetch('/api/ai/detect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ recentComplaints: complaints }),
       });
       const data = await response.json();
@@ -159,27 +173,36 @@ export const AdminDashboard = () => {
     try {
       const res = await fetch('/api/rewards/vouchers/types', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(newVoucher)
       });
       if (res.ok) {
         setIsVoucherModalOpen(false);
         fetchRewardsData();
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Error creating voucher:', err);
+    }
   };
 
   const fetchRewardsData = async () => {
     try {
+      const headers = getAuthHeaders();
       const [lb, types, red] = await Promise.all([
-        fetch('/api/rewards/leaderboard').then(r => r.json()),
-        fetch('/api/rewards/vouchers/available').then(r => r.json()),
-        fetch('/api/rewards/vouchers/redeemed').then(r => r.json())
+        fetch('/api/rewards/leaderboard', { headers }).then(r => r.json()),
+        fetch('/api/rewards/vouchers/available', { headers }).then(r => r.json()),
+        fetch('/api/rewards/vouchers/redeemed', { headers }).then(r => r.json())
       ]);
-      setLeaderboard(lb);
-      setVoucherTypes(types);
-      setRedeemedVouchers(red);
-    } catch (err) {}
+      setLeaderboard(Array.isArray(lb) ? lb : []);
+      setVoucherTypes(Array.isArray(types) ? types : []);
+      setRedeemedVouchers(Array.isArray(red) ? red : []);
+    } catch (err) {
+      console.error('Error fetching rewards data:', err);
+      // Reset to empty arrays on error
+      setLeaderboard([]);
+      setVoucherTypes([]);
+      setRedeemedVouchers([]);
+    }
   };
 
   const fetchData = async () => {
@@ -189,27 +212,32 @@ export const AdminDashboard = () => {
         ...filters,
         page: filters.page.toString()
       });
-      const response = await fetch(`/api/complaints/search?${queryParams}`);
+      const response = await fetch(`/api/complaints/search?${queryParams}`, { headers: getAuthHeaders() });
       const data = await response.json();
-      setComplaints(data.complaints);
-      setTotalCount(data.total);
-      setTotalPages(data.totalPages);
+      setComplaints(Array.isArray(data.complaints) ? data.complaints : []);
+      setTotalCount(data.total || 0);
+      setTotalPages(data.totalPages || 1);
       fetchSlaStats();
       fetchActiveAnomalies();
       fetchRewardsData();
       fetchPendingOfficers();
       
       // Basic Overview (all for KPI cards)
-      const ovRes = await fetch('/api/analytics/overview');
+      const ovRes = await fetch('/api/analytics/overview', { headers: getAuthHeaders() });
       const ovData = await ovRes.json();
       setStats({
-          total: ovData.total,
-          pending: ovData.status.find((s: any) => s.status === 'Pending')?.count || 0,
-          inProgress: ovData.status.find((s: any) => s.status === 'In Progress')?.count || 0,
-          resolved: ovData.status.find((s: any) => s.status === 'Resolved')?.count || 0,
+          total: ovData.total || 0,
+          pending: ovData.status?.find((s: any) => s.status === 'Pending')?.count || 0,
+          inProgress: ovData.status?.find((s: any) => s.status === 'In Progress')?.count || 0,
+          resolved: ovData.status?.find((s: any) => s.status === 'Resolved')?.count || 0,
       });
     } catch (error) {
       console.error('Error fetching data:', error);
+      // Reset to safe defaults
+      setComplaints([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setStats({ total: 0, pending: 0, inProgress: 0, resolved: 0 });
     } finally {
       setIsLoading(false);
     }
@@ -241,7 +269,10 @@ export const AdminDashboard = () => {
     if (!user || user.role !== 'Admin') return;
 
     import('socket.io-client').then(({ default: io }) => {
-      const socket = io('http://localhost:3001');
+      const socketUrl = process.env.NODE_ENV === 'production' 
+        ? window.location.origin 
+        : 'http://localhost:3001';
+      const socket = io(socketUrl);
       socket.emit('join-room', 'Admin');
       socket.on('notification', (notif: any) => {
         if (notif.type === 'alert') {
@@ -263,7 +294,7 @@ export const AdminDashboard = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       await fetch(`/api/anomalies/${id}/acknowledge`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ adminId: user?.id })
       });
       fetchActiveAnomalies();
@@ -558,30 +589,14 @@ export const AdminDashboard = () => {
 
       {/* Smart Search & Filters Section */}
       <AnimatePresence mode="wait">
-        {activeTab === 'Overview' ? (
+        {activeTab === 'Overview' && (
           <motion.div
             key="overview"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              {statCards.map((stat) => (
-                <motion.div
-                  key={stat.label}
-                  whileHover={{ y: -4 }}
-                  className="bg-white/80 backdrop-blur-md p-6 rounded-2xl border border-white/20 shadow-sm"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`p-2 rounded-lg ${stat.color}`}>
-                      <stat.icon size={24} />
-                    </div>
-                  </div>
-                  <div className="text-4xl font-black text-zinc-950 font-display tracking-tight">{stat.value}</div>
-                  <div className="text-sm font-bold text-zinc-500 uppercase tracking-wider mt-2">{stat.label}</div>
-                </motion.div>
-              ))}
-            </div>
+
 
             {/* Smart Search & Filters Section (Previous Features) */}
             <div className="bg-white/80 backdrop-blur-md rounded-[2rem] border border-white shadow-xl overflow-hidden mb-10">
@@ -722,7 +737,7 @@ export const AdminDashboard = () => {
                         <tr key={c.id} className="group hover:bg-zinc-50/50 transition-colors">
                           <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.includes(c.id)} onChange={(e)=>setSelectedIds(prev=> e.target.checked ? [...prev, c.id] : prev.filter(id=>id!==c.id))} /></td>
                           <td className="px-6 py-4">
-                            <div className="font-mono text-sm font-bold text-zinc-900 mb-1">{c.id}</div>
+                            <div className="font-mono text-sm font-bold text-zinc-900 mb-1">{c._id || c.id}</div>
                             <div className={`w-2 h-2 rounded-full ${getSentimentColor(c.sentiment_score)}`} />
                           </td>
                           <td className="px-6 py-4">
@@ -733,7 +748,7 @@ export const AdminDashboard = () => {
                           <td className="px-6 py-4">
                             <select
                               value={c.status}
-                              onChange={(e) => handleStatusUpdate(c.id, e.target.value as ComplaintStatus)}
+                              onChange={(e) => handleStatusUpdate(c._id || c.id, e.target.value as ComplaintStatus)}
                               className="text-[10px] font-black rounded-lg border-2 border-transparent focus:border-emerald-500 py-1 pl-2 pr-6 cursor-pointer bg-zinc-100"
                             >
                               <option value={ComplaintStatus.PENDING}>Pending</option>
@@ -768,7 +783,9 @@ export const AdminDashboard = () => {
               </div>
             </div>
           </motion.div>
-        ) : (
+        )}
+
+        {activeTab === 'Audit' && (
           <motion.div
             key="audit"
             initial={{ opacity: 0, x: 20 }}
@@ -974,7 +991,7 @@ export const AdminDashboard = () => {
                              </tr>
                            </thead>
                            <tbody className="divide-y divide-zinc-50">
-                             {redeemedVouchers.map((v, i) => (
+                             {paginatedVouchers.map((v, i) => (
                                <tr key={i} className="hover:bg-zinc-50/50 transition-colors">
                                  <td className="py-4">
                                    <div className="font-bold text-zinc-900 uppercase italic">{v.citizenName}</div>
@@ -994,6 +1011,13 @@ export const AdminDashboard = () => {
                              ))}
                            </tbody>
                          </table>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between pt-4 border-t border-zinc-100">
+                         <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Page {rewardsPage} of {totalRewardsPages}</span>
+                         <div className="flex gap-2">
+                           <button disabled={rewardsPage === 1} onClick={() => setRewardsPage(prev => prev - 1)} className="px-4 py-2 border border-zinc-200 rounded-xl text-xs font-black disabled:opacity-30">Prev</button>
+                           <button disabled={rewardsPage === totalRewardsPages} onClick={() => setRewardsPage(prev => prev + 1)} className="px-4 py-2 border border-zinc-200 rounded-xl text-xs font-black disabled:opacity-30">Next</button>
+                         </div>
                       </div>
                   </div>
                </div>
@@ -1039,7 +1063,7 @@ export const AdminDashboard = () => {
                       </thead>
                       <tbody className="divide-y divide-zinc-50">
                         {pendingOfficers.map((officer) => (
-                          <tr key={officer.id} className="hover:bg-zinc-50/50 transition-colors">
+                          <tr key={officer._id || officer.id} className="hover:bg-zinc-50/50 transition-colors">
                             <td className="py-4 px-6 font-bold text-zinc-900 lowercase capitalize">{officer.name}</td>
                             <td className="py-4 px-6 text-sm text-zinc-600">{officer.email}</td>
                             <td className="py-4 px-6 text-sm font-bold text-zinc-600">{officer.department}</td>
@@ -1050,7 +1074,7 @@ export const AdminDashboard = () => {
                             </td>
                             <td className="py-4 px-6 text-right">
                               <button 
-                                onClick={() => handleApproveOfficer(officer.id)}
+                                onClick={() => handleApproveOfficer(officer._id || officer.id)}
                                 className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 ml-auto"
                               >
                                 <Check size={16} /> Approve
@@ -1065,10 +1089,9 @@ export const AdminDashboard = () => {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {activeTab === 'Database' && (
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+        {activeTab === 'Database' && (
+          <motion.div key="database" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
           <div className="flex justify-between items-end">
             <div>
               <h2 className="text-3xl font-black text-zinc-950 uppercase tracking-tighter flex items-center gap-3"><Database size={28} /> Live Database Viewer</h2>
@@ -1126,8 +1149,8 @@ export const AdminDashboard = () => {
                     </tr></thead>
                     <tbody className="divide-y divide-zinc-50">
                       {dbStats.recentUsers?.map((u: any) => (
-                        <tr key={u.id} className="hover:bg-zinc-50">
-                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{u.id}</td>
+                        <tr key={u._id || u.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{u._id || u.id}</td>
                           <td className="py-3 px-3 font-bold text-zinc-900">{u.name}</td>
                           <td className="py-3 px-3 text-zinc-600 text-xs">{u.email}</td>
                           <td className="py-3 px-3"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${u.role === 'Admin' ? 'bg-zinc-900 text-white' : 'bg-violet-100 text-violet-700'}`}>{u.role}</span></td>
@@ -1150,8 +1173,8 @@ export const AdminDashboard = () => {
                     </tr></thead>
                     <tbody className="divide-y divide-zinc-50">
                       {dbStats.recentComplaints?.map((c: any) => (
-                        <tr key={c.id} className="hover:bg-zinc-50">
-                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c.id}</td>
+                        <tr key={c._id || c.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c._id || c.id}</td>
                           <td className="py-3 px-3 font-bold text-zinc-900">{c.citizenName}</td>
                           <td className="py-3 px-3 text-zinc-600 text-xs">{c.category}</td>
                           <td className="py-3 px-3"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${c.status === 'Resolved' ? 'bg-emerald-100 text-emerald-700' : c.status === 'In Progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{c.status}</span></td>
@@ -1174,8 +1197,8 @@ export const AdminDashboard = () => {
                     </tr></thead>
                     <tbody className="divide-y divide-zinc-50">
                       {dbStats.recentCitizens?.map((c: any) => (
-                        <tr key={c.id} className="hover:bg-zinc-50">
-                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c.id}</td>
+                        <tr key={c._id || c.id} className="hover:bg-zinc-50">
+                          <td className="py-3 px-3 font-mono text-xs text-zinc-400">{c._id || c.id}</td>
                           <td className="py-3 px-3 font-bold text-zinc-900">{c.name}</td>
                           <td className="py-3 px-3 text-zinc-600 text-xs">{c.email}</td>
                           <td className="py-3 px-3 font-black text-emerald-600">+{c.total_points}</td>
@@ -1189,15 +1212,9 @@ export const AdminDashboard = () => {
               </div>
             </div>
           )}
-
-          {!dbStats && !isLoadingDb && !dbError && (
-            <div className="p-16 bg-white/60 rounded-[2.5rem] border border-white text-center shadow-xl">
-              <Database size={48} className="mx-auto text-zinc-300 mb-4" />
-              <p className="text-zinc-400 font-black uppercase tracking-widest text-sm">Click Refresh to load live database snapshot</p>
-            </div>
-          )}
         </motion.div>
       )}
+    </AnimatePresence>
 
       <AnimatePresence>
         {isVoucherModalOpen && (
@@ -1282,7 +1299,7 @@ export const AdminDashboard = () => {
                     <Shield className="text-emerald-500" size={16} />
                     <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Analysis Case File</span>
                   </div>
-                  <h3 className="text-2xl font-black font-mono tracking-tight">{selectedComplaint.id}</h3>
+                  <h3 className="text-2xl font-black font-mono tracking-tight">{selectedComplaint._id || selectedComplaint.id}</h3>
                 </div>
                 <button 
                   onClick={() => setSelectedComplaint(null)}
@@ -1436,7 +1453,7 @@ export const AdminDashboard = () => {
                           <div className="pt-2">
                             <button 
                               onClick={() => {
-                                handleAssign(selectedComplaint.id, selectedComplaint.recommended_department || 'General');
+                                handleAssign(selectedComplaint._id || selectedComplaint.id, selectedComplaint.recommended_department || 'General');
                                 setSelectedComplaint(null);
                               }}
                               className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"

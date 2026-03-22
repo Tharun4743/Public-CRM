@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
+const AI_API_KEY = process.env.AI_API_KEY;
+const AI_MODEL = process.env.AI_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
 
 export interface AIAnalysis {
     suggestedPriority: string;
@@ -31,30 +32,58 @@ export interface AnomalyReport {
 
 async function callAI(prompt: string): Promise<any> {
     try {
-        const response = await fetch(OLLAMA_URL, {
-            method: 'POST',
-            body: JSON.stringify({
-                model: OLLAMA_MODEL,
-                prompt,
-                format: 'json',
-                stream: false
-            }),
-            headers: { 
-                'Content-Type': 'application/json'
-            }
-        });
+        if (AI_API_KEY) {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${AI_API_KEY}`,
+                    'HTTP-Referer': 'https://pscrm.teamgoat.com', // Optional, for OpenRouter tracking
+                    'X-Title': 'Smart Public Service CRM',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: AI_MODEL,
+                    messages: [
+                        { role: 'user', content: prompt + "\nRespond only with the requested JSON object." }
+                    ],
+                    response_format: { type: 'json_object' }
+                })
+            });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Ollama Error: ${response.status} - ${errorText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`OpenRouter Error: ${response.status} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+            return content ? JSON.parse(content) : null;
+        } else {
+            const response = await fetch(OLLAMA_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    model: process.env.OLLAMA_MODEL || 'llama3.1',
+                    prompt,
+                    format: 'json',
+                    stream: false
+                }),
+                headers: { 
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ollama Error: ${response.status} - ${errorText}`);
+            }
+            
+            const data: any = await response.json();
+            const content = data.response;
+            
+            return content ? JSON.parse(content) : null;
         }
-        
-        const data: any = await response.json();
-        const content = data.response;
-        
-        return content ? JSON.parse(content) : null;
     } catch (error) {
-        console.error('AI Service Error (Ollama):', error);
+        console.error('AI Service Error:', error);
         return null;
     }
 }

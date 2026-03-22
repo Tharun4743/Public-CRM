@@ -11,7 +11,7 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
 
 router.post('/register', async (req, res) => {
-  const { name, email, phone, password, ward } = req.body;
+  const { name, email, phone, password, ward, address } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
   
   const exists = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
@@ -27,6 +27,7 @@ router.post('/register', async (req, res) => {
       phone,
       password_hash: hash,
       ward,
+      address,
       isVerified: false,
       verificationCode,
     });
@@ -114,8 +115,36 @@ router.post('/resend-code', async (req, res) => {
 });
 
 router.get('/me', requireCitizenAuth, async (req: AuthenticatedRequest, res) => {
-  const citizen = await Citizen.findById(req.citizen?.id).select('name email phone ward created_at').lean();
+  const citizen = await Citizen.findById(req.citizen?.id).select('name email phone ward address total_points total_complaints badges createdAt').lean();
   res.json(citizen || null);
+});
+
+router.put('/update-profile', requireCitizenAuth, async (req: AuthenticatedRequest, res) => {
+  const { name, phone, ward, address } = req.body;
+  try {
+    const citizen = await Citizen.findById(req.citizen?.id);
+    if (!citizen) return res.status(404).json({ message: 'Citizen not found' });
+
+    if (name) citizen.name = name;
+    if (phone) citizen.phone = phone;
+    if (ward) citizen.ward = ward;
+    if (address) citizen.address = address;
+
+    await citizen.save();
+    res.json({ 
+      message: 'Profile updated successfully', 
+      citizen: { 
+        id: citizen._id, 
+        name: citizen.name, 
+        email: citizen.email, 
+        phone: citizen.phone, 
+        ward: citizen.ward, 
+        address: citizen.address 
+      } 
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
 });
 
 router.get('/my-complaints', requireCitizenAuth, async (req: AuthenticatedRequest, res) => {

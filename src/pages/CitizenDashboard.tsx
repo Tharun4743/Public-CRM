@@ -55,9 +55,9 @@ export const CitizenDashboard = () => {
 
   const statCards = [
     { label: 'Cases Filed', value: summary.total_complaints || 0, icon: FileText, color: 'text-zinc-900', bg: 'bg-zinc-100' },
-    { label: 'Resolved', value: complaints.filter(c => c.status === 'Resolved').length, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Merit Points', value: summary.total_points || 0, icon: Star, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    { label: 'Badge Tier', value: summary.badges?.length > 0 ? summary.badges[summary.badges.length - 1] : 'Bronze', icon: Trophy, color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'Resolved', value: (complaints || []).filter(c => c.status === 'Resolved').length, icon: CheckCircle2, color: 'text-sky-600', bg: 'bg-sky-50' },
+    { label: 'Merit Points', value: summary.total_points || 0, icon: Star, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: 'Badge Tier', value: summary.rank || 'Bronze', icon: Trophy, color: 'text-violet-600', bg: 'bg-violet-50' },
   ];
 
   const getStatusColor = (status: string) => {
@@ -190,48 +190,51 @@ export const CitizenDashboard = () => {
 
             <motion.div 
                whileHover={{ y: -4 }}
-               className="bg-zinc-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group"
+               className="bg-white rounded-[2.5rem] p-8 text-zinc-950 border border-zinc-100 shadow-xl relative overflow-hidden group"
             >
-               <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform text-zinc-950">
                  <Trophy size={180} />
                </div>
                
                <div className="relative z-10">
-                 <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 italic">Cumulative Recognition</div>
-                 <div className="text-6xl font-black tracking-tighter italic flex items-end gap-2 mb-8">
+                 <div className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-2 italic">Cumulative Recognition</div>
+                 <div className="text-6xl font-black tracking-tighter italic flex items-end gap-2 mb-8 text-zinc-950">
                    {summary.total_points || 0}
-                   <span className="text-lg font-bold uppercase tracking-widest text-zinc-500 mb-2">PTS</span>
+                   <span className="text-lg font-bold uppercase tracking-widest text-sky-600/40 mb-2">PTS</span>
                  </div>
                  
                  <div className="space-y-6">
                     <div>
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2 px-1">
-                        <span>Progress to Silver Tier</span>
-                        <span className="text-emerald-400">{(summary.total_points % 100)} / 100</span>
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-2 px-1 text-zinc-400">
+                        <span>Progress to Next Tier</span>
+                        <span className="text-sky-600 font-bold">{Math.floor(Number(summary.total_points || 0) % 100)} / 100</span>
                       </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.5)] transition-all duration-1000" 
-                          style={{ width: `${(summary.total_points % 100)}%` }}
+                          className="h-full bg-sky-500 rounded-full shadow-[0_0_15px_rgba(14,165,233,0.3)] transition-all duration-1000" 
+                          style={{ width: `${Math.floor(Number(summary.total_points || 0) % 100)}%` }}
                         />
                       </div>
                     </div>
 
                     <div className="pt-4 grid grid-cols-4 gap-3">
                        {['Bronze', 'Silver', 'Gold', 'Diamond'].map((tier, idx) => {
-                          const isEarned = (summary.badges || []).includes(tier);
+                          const tiers = ['Bronze', 'Silver', 'Gold', 'Diamond'];
+                          const currentRankIdx = tiers.indexOf(summary.rank || 'Bronze');
+                          const isEarned = (summary.badges || []).includes(tier) || currentRankIdx >= idx;
                           return (
                             <div key={idx} className="flex flex-col items-center gap-2">
-                               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 transition-all ${isEarned ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-white/5 border-white/5 text-white/20'}`}>
+                               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 transition-all ${isEarned ? 'bg-sky-50 border-sky-500 text-sky-500 shadow-lg shadow-sky-500/10' : 'bg-zinc-50 border-zinc-100 text-zinc-300'}`}>
                                  <Shield size={20} className={isEarned ? 'fill-current' : ''} />
                                </div>
-                               <span className={`text-[8px] font-black uppercase tracking-widest ${isEarned ? 'text-white' : 'text-zinc-600'}`}>{tier}</span>
+                               <span className={`text-[8px] font-black uppercase tracking-widest ${isEarned ? 'text-zinc-900' : 'text-zinc-400'}`}>{tier}</span>
                             </div>
                           );
                        })}
                     </div>
                  </div>
                </div>
+
             </motion.div>
 
             <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] border border-white p-8 shadow-2xl">

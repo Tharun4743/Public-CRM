@@ -352,15 +352,59 @@ export const CitizenSubmit = () => {
                       <AlignLeft size={16} className="text-emerald-600" />
                       Incident Intelligence
                     </label>
+                    <button 
+                      type="button"
+                      onClick={handleAIAnalyze}
+                      disabled={isAnalyzing || formData.description.length < 10}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 text-sky-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-sky-100 transition-all disabled:opacity-50 border border-sky-100"
+                    >
+                      {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      AI Co-Pilot
+                    </button>
                   </div>
-                  <textarea
-                    required
-                    rows={4}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-6 py-5 rounded-[2rem] border-2 border-zinc-200 bg-zinc-50 focus:border-emerald-600 outline-none transition-all text-base text-zinc-900 font-medium placeholder:text-zinc-400 italic"
-                    placeholder="Provide precise details of the structural or civic failure..."
-                  />
+                  <div className="relative">
+                    <textarea
+                      required
+                      rows={4}
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      className="w-full px-6 py-5 rounded-[2rem] border-2 border-zinc-200 bg-zinc-50 focus:border-emerald-600 outline-none transition-all text-base text-zinc-900 font-medium placeholder:text-zinc-400 italic"
+                      placeholder="Provide precise details of the structural or civic failure..."
+                    />
+                    {aiAnalysis && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-emerald-100 shadow-lg flex items-center justify-between gap-4"
+                      >
+                         <div className="flex gap-4">
+                            <div>
+                               <div className="text-[8px] font-black uppercase text-zinc-400 mb-1">Suggested Mode</div>
+                               <div className="text-[10px] font-black text-emerald-600 uppercase italic">Cat: {aiAnalysis.suggestedCategory || formData.category}</div>
+                            </div>
+                            <div className="w-px h-8 bg-zinc-100" />
+                            <div>
+                               <div className="text-[8px] font-black uppercase text-zinc-400 mb-1">Impact Level</div>
+                               <div className="text-[10px] font-black text-amber-600 uppercase italic">Priority: {aiAnalysis.suggestedPriority || formData.priority}</div>
+                            </div>
+                         </div>
+                         <button 
+                           type="button"
+                           onClick={applyAISuggestion}
+                           className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all"
+                         >
+                           Optimize Request
+                         </button>
+                         <button 
+                           type="button" 
+                           onClick={() => setAiAnalysis(null)} 
+                           className="p-1 text-zinc-400 hover:text-zinc-600"
+                         >
+                           <X size={14} />
+                         </button>
+                      </motion.div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -444,33 +488,33 @@ export const CitizenSubmit = () => {
           </div>
 
           <div className="space-y-8">
-            <div className="bg-zinc-900 p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden h-fit">
-              <div className="absolute top-0 right-0 p-10 opacity-10">
+            <div className="bg-white p-10 rounded-[2.5rem] text-zinc-950 border border-zinc-100 shadow-xl relative overflow-hidden h-fit">
+              <div className="absolute top-0 right-0 p-10 opacity-5 text-zinc-950">
                 <ShieldCheck size={180} />
               </div>
               <div className="relative z-10">
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter mb-4 text-emerald-400 leading-none">Vault Protocol</h3>
-                <p className="text-zinc-500 font-bold uppercase tracking-widest text-[9px] mb-8 italic leading-relaxed">System integration for verified public contribution</p>
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter mb-4 text-emerald-600 leading-none">Vault Protocol</h3>
+                <p className="text-zinc-400 font-bold uppercase tracking-widest text-[9px] mb-8 italic leading-relaxed">System integration for verified public contribution</p>
                 
                 <div className="space-y-4">
-                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 text-xs font-black">01</div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">Identity Validation</span>
+                   <div className="flex items-center gap-4 p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 text-xs font-black">01</div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Identity Validation</span>
                    </div>
-                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 text-xs font-black">02</div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">SLA Matrix Integration</span>
+                   <div className="flex items-center gap-4 p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 text-xs font-black">02</div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">SLA Matrix Integration</span>
                    </div>
-                   <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
-                      <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 text-xs font-black">03</div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">Merit-Based Rewards</span>
+                   <div className="flex items-center gap-4 p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 text-xs font-black">03</div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Merit-Based Rewards</span>
                    </div>
                 </div>
                 
                 {!isLoggedIn && (
                   <Link 
                     to="/citizen-login"
-                    className="w-full mt-10 py-4 bg-white text-zinc-900 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-white transition-all shadow-xl"
+                    className="w-full mt-10 py-4 bg-zinc-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-xl"
                   >
                     Authorize Portal
                     <ArrowRight size={14} />

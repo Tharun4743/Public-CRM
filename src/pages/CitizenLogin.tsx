@@ -364,67 +364,96 @@ export const CitizenLogin = () => {
               exit={{ opacity: 0, x: isLogin ? 20 : -20 }}
               className="space-y-5"
             >
-              {!isLogin && (
-                <div className="space-y-2">
-                  <label className={labelClass}>FULL IDENTITY NAME</label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-                    <input
-                      required
-                      type="text"
-                      className={inputClass}
-                      placeholder="ENTER FULL NAME"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className={labelClass}>EMAIL ADDRESS</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
-                  <input
-                    required
-                    type="email"
-                    className={inputClass}
-                    placeholder="name@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {!isLogin && (
-                <div className="grid grid-cols-2 gap-4">
+              {!isLogin ? (
+                <>
                   <div className="space-y-2">
-                    <label className={labelClass}>PHONE</label>
+                    <label className={labelClass}>FULL IDENTITY NAME</label>
                     <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                      <input
-                        required
-                        type="tel"
-                        className={inputClass}
-                        placeholder="PH NO"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className={labelClass}>TALUK</label>
-                    <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                       <input
                         required
                         type="text"
                         className={inputClass}
-                        placeholder="TALUK NO"
-                        value={formData.ward}
-                        onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
+                        placeholder="ENTER FULL NAME"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className={labelClass}>EMAIL ADDRESS</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                      <input
+                        required
+                        type="email"
+                        className={inputClass}
+                        placeholder="name@example.com"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={labelClass}>PHONE</label>
+                      <div className="relative">
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                        <input
+                          required
+                          type="tel"
+                          className={inputClass}
+                          placeholder="PH NO"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelClass}>TALUK / WARD</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                        <input
+                          required
+                          type="text"
+                          className={inputClass}
+                          placeholder="TALUK NO"
+                          value={formData.ward}
+                          onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className={labelClass}>RESIDENTIAL ADDRESS</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-4 top-4 text-zinc-400" size={18} />
+                      <textarea
+                        required
+                        className={`${inputClass} min-h-[100px] py-4 resize-none`}
+                        placeholder="ENTER YOUR FULL RESIDENTIAL ADDRESS"
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <label className={labelClass}>EMAIL ADDRESS</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600" size={20} />
+                    <input
+                      required
+                      type="email"
+                      className={inputClass}
+                      placeholder="name@example.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    />
                   </div>
                 </div>
               )}

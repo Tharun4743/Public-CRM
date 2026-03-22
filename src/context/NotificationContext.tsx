@@ -30,7 +30,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!user) return;
 
-    const socket = io('http://localhost:3001');
+    const socketUrl = process.env.NODE_ENV === 'production' 
+      ? window.location.origin 
+      : 'http://localhost:3001';
+    const socket = io(socketUrl);
 
     socket.on('connect', () => {
       socket.emit('join-room', user.id);
@@ -51,12 +54,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user?.id]);
 
   const fetchNotifications = async () => {
-    if (!user) return;
+    if (!user || !user.id) return;
     try {
       const res = await fetch(`/api/notifications?userId=${user.id}`);
+      if (!res.ok) {
+        console.error('Failed to fetch notifications:', res.status);
+        return;
+      }
       const data = await res.json();
-      setNotifications(data);
-    } catch (err) {}
+      // Ensure data is an array
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setNotifications([]); // Reset to empty array on error
+    }
   };
 
   const markAsRead = async (id: string) => {
@@ -78,7 +89,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (err) {}
   };
 
-  const unreadCount = notifications.filter(n => n.is_read === 0).length;
+  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => n.is_read === 0).length : 0;
 
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllRead }}>

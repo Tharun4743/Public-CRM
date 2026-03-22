@@ -6,6 +6,7 @@ export interface ICitizen extends Document {
     phone?: string;
     password_hash: string;
     ward?: string;
+    address?: string;
     total_points: number;
     total_complaints: number;
     badges: string[];
@@ -21,6 +22,7 @@ const CitizenSchema = new Schema<ICitizen>({
     phone: { type: String },
     password_hash: { type: String, required: true },
     ward: { type: String },
+    address: { type: String },
     total_points: { type: Number, default: 0 },
     total_complaints: { type: Number, default: 0 },
     badges: { type: [String], default: [] },
