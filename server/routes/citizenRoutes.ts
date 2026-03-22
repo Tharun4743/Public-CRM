@@ -148,7 +148,7 @@ router.post('/reset-password', async (req, res) => {
   if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
   const citizen = db.prepare('SELECT * FROM citizens WHERE LOWER(email)=LOWER(?)').get(email) as any;
   if (!citizen || citizen.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
-  const hash = await bcrypt.hash(newPassword, 10);
+  const hash = await bcrypt.hash(newPassword, 8);
   db.prepare('UPDATE citizens SET password_hash = ?, verificationCode = NULL WHERE id = ?').run(hash, citizen.id);
   res.json({ message: 'Password reset successfully. Please login.' });
 });
