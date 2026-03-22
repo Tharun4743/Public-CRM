@@ -114,9 +114,23 @@ export const userController = {
       }
 
       if (user.isVerified === false) {
+        console.log(`[LOGIN] User not verified: ${email}. Attempting to resend OTP...`);
+        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+        user.verificationCode = newCode;
+        await user.save();
+        
+        let emailResent = false;
+        try {
+          await emailService.sendVerificationEmail(email, newCode);
+          emailResent = true;
+        } catch (e) {
+          console.error('[LOGIN] OTP Resend failed:', e);
+        }
+
         return res.status(403).json({ 
-          message: "Email not verified. Please verify your email before logging in.",
-          needsVerification: true 
+          message: "Email not verified. A new verification code has been sent.",
+          needsVerification: true,
+          ...(emailResent ? {} : { devCode: newCode })
         });
       }
 

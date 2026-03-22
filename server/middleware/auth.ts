@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
+const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
 
 export interface AuthenticatedRequest extends Request {
   citizen?: { id: string; email: string; role: string };

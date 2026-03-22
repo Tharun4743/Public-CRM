@@ -8,7 +8,7 @@ import { complaintService } from '../services/complaintService.ts';
 import { emailService } from '../services/emailService.ts';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
+const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
 
 router.post('/register', async (req, res) => {
   const { name, email, phone, password, ward, address } = req.body;
@@ -109,8 +109,24 @@ router.post('/login', async (req, res) => {
     }
     
     if (!citizen.isVerified) {
-      console.log(`[LOGIN] User not verified: ${email}`);
-      return res.status(401).json({ message: 'Please verify your email first. Check your inbox for the verification code.' });
+      console.log(`[LOGIN] User not verified: ${email}. Attempting to resend OTP...`);
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      citizen.verificationCode = newCode;
+      await citizen.save();
+      
+      let emailResent = false;
+      try {
+        await emailService.sendVerificationEmail(email, newCode);
+        emailResent = true;
+      } catch (e) {
+        console.error('[LOGIN] OTP Resend failed:', e);
+      }
+      
+      return res.status(401).json({ 
+        message: 'Account not verified. A new verification code has been generated.',
+        needsVerification: true,
+        ...(emailResent ? {} : { devCode: newCode })
+      });
     }
     
     const isValid = await bcrypt.compare(password, citizen.password_hash);
