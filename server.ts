@@ -108,6 +108,7 @@ const startServer = async () => {
     try {
         console.log('=== PS-CRM Server Starting ===');
         console.log(`Port: ${PORT}`);
+        console.log(`Node.js version: ${process.version}`);
         console.log('Environment variables check:');
         console.log('- NODE_ENV:', process.env.NODE_ENV);
         console.log('- MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
@@ -115,19 +116,40 @@ const startServer = async () => {
         console.log('- ADMIN_DB_KEY:', process.env.ADMIN_DB_KEY ? 'SET' : 'NOT SET');
         
         // Start HTTP server first
-        httpServer.listen(PORT, () => {
+        const server = httpServer.listen(PORT, () => {
             console.log(`✅ HTTP Server running on port ${PORT}`);
+            console.log(`✅ Server ready to accept connections`);
         });
+        
+        // Set server timeout for Render
+        server.timeout = 30000; // 30 seconds
+        server.keepAliveTimeout = 65000;
+        server.headersTimeout = 66000;
         
         // Connect to database with error handling
         console.log('Connecting to database...');
-        await connectDb();
-        console.log('✅ Database connected');
+        try {
+            await connectDb();
+            console.log('✅ Database connected');
+        } catch (dbError) {
+            console.error('❌ Database connection failed:', dbError.message);
+            console.log('⚠️ Continuing without database - some features may not work');
+        }
         
-        // Start services
-        slaService.startSlaMonitoring();
-        emailPollingService.start();
-        console.log('✅ Background services started');
+        // Start services with error handling
+        try {
+            slaService.startSlaMonitoring();
+            console.log('✅ SLA monitoring started');
+        } catch (slaError) {
+            console.log('⚠️ SLA service failed to start:', slaError.message);
+        }
+        
+        try {
+            emailPollingService.start();
+            console.log('✅ Email polling started');
+        } catch (emailError) {
+            console.log('⚠️ Email polling failed to start:', emailError.message);
+        }
 
         // Verify Email Connectivity on Startup
         try {
@@ -144,6 +166,8 @@ const startServer = async () => {
         }
         
         console.log('=== PS-CRM Server Started Successfully ===');
+        console.log('🌐 Server is ready to handle requests');
+        
     } catch (error) {
         console.error('=== SERVER STARTUP FAILED ===');
         console.error('Error:', error.message);
@@ -151,6 +175,7 @@ const startServer = async () => {
         
         // Don't exit immediately, give time for logs to be captured
         setTimeout(() => {
+            console.log('💀 Server shutting down due to fatal error');
             process.exit(1);
         }, 5000);
     }
