@@ -15,13 +15,13 @@ services:
       - key: APP_URL
         value: https://ps-crm-995a.onrender.com
       - key: SMTP_HOST
-        sync: false
+        value: smtp.gmail.com
       - key: SMTP_PORT
-        sync: false
+        value: 587
       - key: SMTP_USER
-        sync: false
+        value: teamgoatvsb@gmail.com
       - key: SMTP_PASS
-        sync: false
+        value: eagcxyhjthuywdrk
       - key: AI_API_KEY
         sync: false
       - key: AI_MODEL
