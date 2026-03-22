@@ -28,7 +28,14 @@ import { slaService } from "./server/services/slaService.ts";
 import { emailPollingService } from "./server/services/emailPollingService.ts";
 
 const app = express();
+app.set('trust proxy', 1); // For Render
+app.disable('x-powered-by'); // Security + Small performance win
+
 const httpServer = http.createServer(app);
+
+// Keep-alive settings for highest response speed in cloud (Render)
+httpServer.keepAliveTimeout = 65000;
+httpServer.headersTimeout = 66000;
 const io = new Server(httpServer, {
   cors: {
     origin: "*",

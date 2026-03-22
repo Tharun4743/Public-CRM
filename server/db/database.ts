@@ -13,7 +13,9 @@ db.pragma('synchronous = NORMAL');
 db.pragma('temp_store = MEMORY');
 db.pragma('mmap_size = 30000000000');
 db.pragma('page_size = 4096');
-db.pragma('cache_size = -16000'); // 16MB cache
+db.pragma('cache_size = -64000'); // Increase to 64MB cache for highest response speed
+db.pragma('busy_timeout = 5000');
+db.pragma('cache_spill = OFF');
 
 export const initDb = () => {
     console.log('Initializing database schema...');
