@@ -9,7 +9,23 @@ import { aiService } from "../services/aiService.ts";
 export const complaintController = {
   submitComplaint: async (req: Request, res: Response) => {
     try {
-      const { description, category, forceSubmit, citizen_email, citizen_phone, contactInfo } = req.body;
+      const { description, category, citizenName, citizen_email, contactInfo, citizen_id, forceSubmit } = req.body;
+      
+      console.log("[COMPLAINT] Received submission request:", { 
+          hasName: !!citizenName, 
+          hasEmail: !!(citizen_email || contactInfo),
+          category 
+      });
+
+      // Robust Validation
+      if (!description || !category || (!citizen_email && !contactInfo) || !citizenName) {
+        console.error("[COMPLAINT] Validation failed: Missing required fields");
+        return res.status(400).json({ 
+          message: "Missing required fields: name, email, category or description.",
+          received: { description: !!description, category: !!category, email: !!(citizen_email || contactInfo), name: !!citizenName }
+        });
+      }
+
       const targetEmail = citizen_email || contactInfo;
       
       const lastComplaints = await Complaint.find({
@@ -17,7 +33,13 @@ export const complaintController = {
       }).sort({ createdAt: -1 }).limit(25).lean();
       
       const past = lastComplaints.map(c => c.category);
-      const ai = await aiService.analyzeComplaint(description, category, past);
+      let ai;
+      try {
+        ai = await aiService.analyzeComplaint(description, category, past);
+      } catch (aiErr) {
+        console.warn("[COMPLAINT] AI Analysis failed, using fallback:", aiErr);
+        ai = { suggestedPriority: 'Medium', sentimentScore: 50, urgencyLevel: 'Medium', estimatedResolutionDays: 7, summary: description.slice(0, 100), tags: [category] };
+      }
 
       if (!forceSubmit) {
         const check = await duplicateService.checkDuplicates(description, category);
@@ -43,11 +65,7 @@ export const complaintController = {
         ai_tags: req.body.ai_tags || ai.tags
       });
       
-      if (targetEmail && targetEmail.includes('@')) {
-        emailService.sendTrackingCodeEmail(targetEmail, complaint._id, complaint.category);
-      }
-      
-      res.status(201).json(complaint);
+      res.status(201).json({ ...complaint, id: complaint._id });
     } catch (error) {
       console.error("EXACT SUBMISSION ERROR IS:", error);
       res.status(500).json({ message: "Error submitting complaint", error: error instanceof Error ? error.message : "Unknown error" });

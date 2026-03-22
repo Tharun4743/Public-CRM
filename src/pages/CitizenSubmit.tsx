@@ -33,7 +33,8 @@ export const CitizenSubmit = () => {
     latitude: '',
     longitude: '',
     address: '',
-    complaint_image: ''
+    complaint_image: '',
+    citizen_id: ''
   });
   const [isGettingLocation, setIsGettingLocation] = React.useState(false);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
@@ -63,7 +64,8 @@ export const CitizenSubmit = () => {
               ...prev,
               citizenName: data.name,
               citizen_email: data.email,
-              citizen_phone: data.phone || ''
+              citizen_phone: data.phone || '',
+              citizen_id: data._id || data.id || ''
             }));
           }
         } catch (err) {}
@@ -175,7 +177,7 @@ export const CitizenSubmit = () => {
       }
 
       if (response.ok) {
-        setSubmittedId(data.id);
+        setSubmittedId(data._id || data.id);
       } else {
         alert(data.message || "Registry Failure");
       }

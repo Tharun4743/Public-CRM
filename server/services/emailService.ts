@@ -8,37 +8,48 @@ const smtpUser = process.env.SMTP_USER || '';
 
 // Resilient SMTP Configuration for Render (Optimized for Gmail App Passwords)
 export const createTransporter = () => {
-  if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
-    console.log(`[SMTP] Initializing for ${smtpUser} (Port 465, IPv4 forced)`);
+    console.log(`[SMTP] Initializing for ${smtpUser} (Port 465, IPv4 mode)`);
+    if (!smtpUser || !smtpPass) {
+      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is missing in environment variables!');
+      return null;
+    }
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
-      secure: true, // Port 465 requires secure: true
+      secure: true,
       auth: { user: smtpUser, pass: smtpPass },
-      // Performance & Compatibility Engine
       pool: true,
       maxConnections: 5,
-      maxMessages: 100,
-      connectionTimeout: 10000, 
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      family: 4, // CRITICAL: Stop Render from using unreachable IPv6 routes to Atlas
+      connectionTimeout: 15000, 
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+      family: 4, 
       tls: {
-        rejectUnauthorized: false, // Avoid SSL handshake failures on cloud servers
+        rejectUnauthorized: false,
         minVersion: 'TLSv1.2'
       }
     } as any);
-  }
-  return null;
 };
 
 export const emailService = {
   sendVerificationEmail: async (email: string, code: string) => {
-    console.log(`[EMAIL] Verification code for ${email}: ${code}`);
+    console.log(`[EMAIL] Attempting to send OTP to ${email}...`);
     const transporter = createTransporter();
+    
     if (!transporter) {
-      throw new Error('SMTP not configured — email not sent');
+      console.error('[SMTP] SEND FAILURE: Transporter not initialized. Check Env Vars.');
+      throw new Error('SMTP Config Missing');
     }
+
+    try {
+      // Small verification check before sending
+      await transporter.verify();
+      console.log('[SMTP] Verification check passed.');
+    } catch (vErr: any) {
+      console.error('[SMTP] PORT 465 Connection Failed:', vErr.message);
+      throw vErr;
+    }
+
     const fromAddress = smtpUser;
     const mailOptions = {
       from: `"PS-CRM System" <${fromAddress}>`,
@@ -47,20 +58,23 @@ export const emailService = {
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
           <h2 style="color: #059669;">Verify Your Identity</h2>
-          <p>Thank you for registering with the Smart Public Services CRM. Please use the following code to verify your email address:</p>
-          <div style="background: #f0fdf4; padding: 20px; border-radius: 12px; text-align: center; font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #065f46; margin: 20px 0; border: 2px solid #6ee7b7;">
+          <p>Thank you for registering. Your verification code is below:</p>
+          <div style="background: #f0fdf4; padding: 20px; border-radius: 12px; text-align: center; font-size: 36px; font-weight: bold; color: #065f46; margin: 20px 0; border: 2px solid #6ee7b7;">
             ${code}
           </div>
-          <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">Secure, Transparent, and Citizen-Centric Governance — Smart Public Services CRM</p>
+          <p>Code expires in 10 minutes.</p>
         </div>
       `,
     };
-    // This will THROW if SMTP fails — caller handles the fallback
-    const info = await (transporter as any).sendMail(mailOptions);
-    console.log(`[EMAIL] ✅ Verification email sent to ${email} — MsgId: ${info.messageId}`);
-    return info;
+
+    try {
+      const info = await (transporter as any).sendMail(mailOptions);
+      console.log(`[EMAIL] ✅ SUCCESS: Sent to ${email} (ID: ${info.messageId})`);
+      return info;
+    } catch (sendErr: any) {
+      console.error('[EMAIL] ❌ nodemailer.sendMail FAILED:', sendErr);
+      throw sendErr;
+    }
   },
 
   sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string) => {
