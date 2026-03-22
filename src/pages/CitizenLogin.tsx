@@ -49,13 +49,17 @@ export const CitizenLogin = () => {
 
     try {
       const endpoint = isLogin ? '/api/citizens/login' : '/api/citizens/register';
+      console.log(`[LOGIN] Attempting ${endpoint} with:`, { email: formData.email, password: '***' });
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
 
+      console.log(`[LOGIN] Response status:`, response.status);
       const data = await response.json();
+      console.log(`[LOGIN] Response data:`, data);
 
       if (response.ok) {
         if (!isLogin) {
@@ -78,7 +82,14 @@ export const CitizenLogin = () => {
         }
       }
     } catch (err) {
-      setError("Connection error. Please try again.");
+      console.error('[LOGIN] Network error:', err);
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError("Network error. Server may be starting up. Please wait 30 seconds and try again.");
+      } else if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+        setError("Cannot connect to server. Please check your internet connection.");
+      } else {
+        setError("Connection error. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }

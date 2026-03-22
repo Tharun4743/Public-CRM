@@ -55,17 +55,30 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(`[LOGIN] Attempt for email: ${email}`);
+    
     const citizen = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
-    if (!citizen) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!citizen) {
+      console.log(`[LOGIN] User not found: ${email}`);
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
     
-    const ok = await bcrypt.compare(password, citizen.password_hash);
-    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!citizen.isVerified) {
+      console.log(`[LOGIN] User not verified: ${email}`);
+      return res.status(401).json({ message: 'Please verify your email first. Check your inbox for the verification code.' });
+    }
     
-    if (!citizen.isVerified) return res.status(403).json({ message: 'Email not verified. Please verify your email before logging in.', needsVerification: true });
+    const isValid = await bcrypt.compare(password, citizen.password_hash);
+    if (!isValid) {
+      console.log(`[LOGIN] Invalid password for: ${email}`);
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
     
     const token = jwt.sign({ id: citizen._id, email: citizen.email, role: 'Citizen' }, JWT_SECRET, { expiresIn: '7d' });
+    console.log(`[LOGIN] Success for: ${email}`);
     res.json({ token, citizen: { id: citizen._id, name: citizen.name, email: citizen.email, phone: citizen.phone, ward: citizen.ward } });
   } catch (error: any) {
+    console.error('[LOGIN] Error:', error);
     res.status(500).json({ message: 'Login encountered an error.' });
   }
 });
