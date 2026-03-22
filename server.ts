@@ -103,28 +103,59 @@ io.on("connection", (socket) => {
 // Start Server
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, async () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log('Environment variables check:');
-    console.log('- NODE_ENV:', process.env.NODE_ENV);
-    console.log('- MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
-    console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
-    console.log('- ADMIN_DB_KEY:', process.env.ADMIN_DB_KEY ? 'SET' : 'NOT SET');
-    console.log('Starting database connection...');
-    await connectDb();
-    slaService.startSlaMonitoring();
-    emailPollingService.start();
+// More robust startup with error handling
+const startServer = async () => {
+    try {
+        console.log('=== PS-CRM Server Starting ===');
+        console.log(`Port: ${PORT}`);
+        console.log('Environment variables check:');
+        console.log('- NODE_ENV:', process.env.NODE_ENV);
+        console.log('- MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
+        console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
+        console.log('- ADMIN_DB_KEY:', process.env.ADMIN_DB_KEY ? 'SET' : 'NOT SET');
+        
+        // Start HTTP server first
+        httpServer.listen(PORT, () => {
+            console.log(`✅ HTTP Server running on port ${PORT}`);
+        });
+        
+        // Connect to database with error handling
+        console.log('Connecting to database...');
+        await connectDb();
+        console.log('✅ Database connected');
+        
+        // Start services
+        slaService.startSlaMonitoring();
+        emailPollingService.start();
+        console.log('✅ Background services started');
 
-    // Verify Email Connectivity on Startup
-    import('./server/services/emailService.ts').then(({ createTransporter }) => {
-        const transporter = createTransporter();
-        if (transporter) {
-            transporter.verify((error: any) => {
-                if (error) console.error('❌ SMTP Connection Error:', error);
-                else console.log('✅ SMTP Server is ready to send emails');
-            });
+        // Verify Email Connectivity on Startup
+        try {
+            const { createTransporter } = await import('./server/services/emailService.ts');
+            const transporter = createTransporter();
+            if (transporter) {
+                transporter.verify((error: any) => {
+                    if (error) console.log('⚠️ SMTP Connection Error:', error.message);
+                    else console.log('✅ SMTP Server ready');
+                });
+            }
+        } catch (emailError) {
+            console.log('⚠️ Email service initialization failed:', emailError.message);
         }
-    });
-});
+        
+        console.log('=== PS-CRM Server Started Successfully ===');
+    } catch (error) {
+        console.error('=== SERVER STARTUP FAILED ===');
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        
+        // Don't exit immediately, give time for logs to be captured
+        setTimeout(() => {
+            process.exit(1);
+        }, 5000);
+    }
+};
+
+startServer();
 
 

@@ -8,13 +8,22 @@ dotenv.config();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pscrm:TEAMGOAT@ps-crm.mxwibid.mongodb.net/?appName=ps-crm';
 
 export const connectDb = async () => {
+    if (!MONGODB_URI) {
+        console.error('❌ MONGODB_URI environment variable is not set!');
+        console.error('Please set MONGODB_URI in your Render environment variables');
+        throw new Error('MONGODB_URI is required but not set');
+    }
+    
     try {
         await mongoose.connect(MONGODB_URI);
         console.log('MongoDB connected successfully');
         await initSeedData();
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        process.exit(1);
+        if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            console.error('❌ Network error - check if MongoDB URI is correct and accessible');
+        }
+        throw error;
     }
 };
 
