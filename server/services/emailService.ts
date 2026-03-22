@@ -11,20 +11,17 @@ export const createTransporter = () => {
       return null;
     }
     
-    // Using explicit Port 465 (SMTPS) which is often more stable for 'forever' connections than 587
+    // NATIVE GMAIL OPTIMIZATION:
+    // We are using the internal 'gmail' driver in Nodemailer.
+    // This is the fastest method for Gmail as it uses pre-configured secure settings.
     return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // true for 465
+      service: 'gmail',
       auth: { user: currentUser, pass: currentPass },
-      connectionTimeout: 10000, 
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      dnsTimeout: 5000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    } as any);
+      // Minimal config = Faster speeds
+      connectionTimeout: 8000, 
+      greetingTimeout: 8000,
+      socketTimeout: 15000
+    });
 };
 
 export const emailService = {
@@ -34,26 +31,20 @@ export const emailService = {
 
     const currentUser = (process.env.SMTP_USER || '').trim();
     const mailOptions = {
-      from: `"PS-CRM System" <${currentUser}>`,
-      to: email,
-      subject: 'Email Verification - Smart Public Services CRM',
-      html: `<div style="padding: 20px; font-family: sans-serif;">
-          <h2>Your OTP: ${code}</h2>
-          <p>Please enter this code into the app. Valid for 5 minutes.</p>
-        </div>`
+        from: `"Smart City Portal" <${currentUser}>`,
+        to: email,
+        subject: `Your OTP: ${code}`,
+        text: `Your Verification Code is: ${code}. Valid for 5 minutes.`,
+        html: `<h3>Your Verification Code: <strong>${code}</strong></h3>`
     };
 
-    // STRICT 25s timeout to prevent Render 502 Bad Gateway (which happens at 30s)
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 25000));
-    const sendPromise = transporter.sendMail(mailOptions);
-
     try {
-      console.log(`[EMAIL] Handshaking with Gmail for ${email}...`);
-      await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[EMAIL] ✅ Sent.`);
+      console.log(`[SMTP] DISPATCHING REAL-TIME EMAIL TO ${email}...`);
+      await transporter.sendMail(mailOptions);
+      console.log(`[SMTP] ✅ REAL-TIME DELIVERY COMPLETE.`);
       return { success: true };
     } catch (err: any) {
-      console.error(`[EMAIL] ❌ Failed: ${err.message}`);
+      console.error(`[SMTP] ❌ Real-Time Delivery STALLED: ${err.message}`);
       return { success: false };
     }
   },
@@ -61,35 +52,28 @@ export const emailService = {
   sendForgotPasswordEmail: async (email: string, code: string, role: string) => {
     const transporter = createTransporter();
     if (!transporter) return { success: false };
-
     const currentUser = (process.env.SMTP_USER || '').trim();
-    const mailOptions = {
-      from: `"PS-CRM Security" <${currentUser}>`,
-      to: email,
-      subject: 'Password Recovery',
-      html: `<p>Your recovery code: <b>${code}</b></p>`
-    };
-
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 25000));
-    const sendPromise = transporter.sendMail(mailOptions);
-
     try {
-      await Promise.race([sendPromise, timeoutPromise]);
+      await transporter.sendMail({
+        from: `"Smart City Security" <${currentUser}>`,
+        to: email,
+        subject: `Password Reset: ${code}`,
+        text: `Your Recovery Code: ${code}`
+      });
       return { success: true };
     } catch (err: any) {
-      console.error(`[EMAIL] ❌ Recovery Failed: ${err.message}`);
+      console.error(`[SMTP] ❌ Recovery STALLED: ${err.message}`);
       return { success: false };
     }
   },
 
-  // Simplified these for speed
+  // These are secondary and shouldn't block any main auth flow
   sendTrackingCodeEmail: async (email: string, trackingCode: string, complaintId: string) => {
     const transporter = createTransporter();
     if (!transporter) return;
-    const currentUser = (process.env.SMTP_USER || '').trim();
     try {
       await transporter.sendMail({
-        from: `"PS-CRM" <${currentUser}>`,
+        from: `"Smart City" <${process.env.SMTP_USER}>`,
         to: email,
         subject: `Tracking ID: ${complaintId}`,
         text: `Your Tracking ID: ${trackingCode}`
@@ -100,13 +84,12 @@ export const emailService = {
   sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string) => {
     const transporter = createTransporter();
     if (!transporter) return;
-    const currentUser = (process.env.SMTP_USER || '').trim();
     try {
       await transporter.sendMail({
-        from: `"PS-CRM Updates" <${currentUser}>`,
+        from: `"Smart City" <${process.env.SMTP_USER}>`,
         to: email,
         subject: `Update: ${trackingCode}`,
-        text: `Status: ${newStatus}`
+        text: `The status of ${trackingCode} is now ${newStatus}`
       });
     } catch (e) {}
   }
