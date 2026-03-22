@@ -1,5 +1,5 @@
 import { Notification } from '../models/System.ts';
-import { io } from "../../server.ts";
+import { io } from "../socket.ts";
 
 export const notificationService = {
   create: async (userId: string | null, complaintId: string | null, type: string, message: string) => {
