@@ -2,34 +2,23 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Production-Grade Gmail SMTP Configuration (Strictly Environment Driven)
 export const createTransporter = () => {
-    // Read from process.env inside the function to ensure we catch any runtime updates in cloud environments
     const currentPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
     const currentUser = (process.env.SMTP_USER || '').trim();
 
     if (!currentUser || !currentPass) {
-      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is missing in Render dashboard Environment Variables.');
+      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is missing in Render dashboard.');
       return null;
     }
     
-    console.log(`[SMTP] Attempting secure STARTTLS (Port 587) for ${currentUser}...`);
-    // Standardizing on Port 587 as Port 465 is frequently blocked by cloud vendor firewalls
+    console.log(`[SMTP] Attempting Service:Gmail for ${currentUser}...`);
     return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // TLS is handled by STARTTLS (requireTLS: true)
-      requireTLS: true,
+      service: 'gmail',
       auth: { user: currentUser, pass: currentPass },
-      logger: true, 
-      debug: false, 
-      pool: false, 
-      connectionTimeout: 15000, // 15s - Increased for cloud latency
-      greetingTimeout: 15000, 
-      socketTimeout: 20000,
+      logger: true,
+      debug: false,
       tls: {
-        rejectUnauthorized: false, // Prevents certificate trust issues in cloud networks
-        minVersion: 'TLSv1.2'
+        rejectUnauthorized: false
       }
     } as any);
 };
@@ -54,12 +43,9 @@ export const emailService = {
         </div>`
     };
 
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
-
     try {
       console.log(`[EMAIL] Dispatching Verification to ${email}...`);
-      await Promise.race([sendPromise, timeoutPromise]);
+      await transporter.sendMail(mailOptions);
       console.log(`[EMAIL] ✅ Successfully sent verification to ${email}`);
       return { success: true };
     } catch (err: any) {
@@ -90,13 +76,10 @@ export const emailService = {
         </div>`,
     };
 
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
-
     try {
-      await Promise.race([sendPromise, timeoutPromise]);
-    } catch (err) {
-      console.warn(`[EMAIL] Tracking email for ${trackingCode} timed out.`);
+      await transporter.sendMail(mailOptions);
+    } catch (err: any) {
+      console.warn(`[EMAIL] Tracking email for ${trackingCode} failed - ${err.message}`);
     }
   },
 
@@ -119,11 +102,8 @@ export const emailService = {
         </div>`
     };
 
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
-
     try {
-      await Promise.race([sendPromise, timeoutPromise]);
+      await transporter.sendMail(mailOptions);
       return { success: true };
     } catch (err: any) {
       console.error(`[EMAIL] Recovery Email Error: ${err.message}`);
