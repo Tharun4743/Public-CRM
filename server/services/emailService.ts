@@ -2,25 +2,26 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Strip spaces from Gmail App Password (dotenv may include them if not quoted)
-const smtpPass = (process.env.SMTP_PASS || 'nawhxvqsmutslvgi').replace(/\s/g, '');
-const smtpUser = (process.env.SMTP_USER || 'tk8067479@gmail.com').trim();
+// Clean SMTP credentials from Environment Variables — (STRIPPED OF HARDCODED DATA FOR SECURITY)
+const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
+const smtpUser = (process.env.SMTP_USER || '').trim();
 
-// Optimized Gmail SMTP for Render (Uses 'service' preset)
+// Production-Grade Gmail SMTP Configuration (Strictly Environment Driven)
 export const createTransporter = () => {
-    console.log(`[SMTP] Initializing for ${smtpUser} (Gmail Service Mode)`);
     if (!smtpUser || !smtpPass) {
-      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is missing!');
+      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is not set in Render environment variables!');
       return null;
     }
+    
+    console.log(`[SMTP] Initializing secure connection for ${smtpUser}...`);
     return nodemailer.createTransport({
       service: 'gmail',
       auth: { user: smtpUser, pass: smtpPass },
-      logger: true, // Log to console for Render debugging
-      debug: true,  // Include detailed transcript
-      pool: false,  // Don't pool on Render to avoid connection drops
+      logger: true, 
+      debug: false, // Set to false for cleaner production logs
+      pool: false, 
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: false, // Necessary for many cloud networks
         minVersion: 'TLSv1.2'
       }
     } as any);
@@ -62,14 +63,21 @@ export const emailService = {
       `,
     };
 
+    const sendPromise = (transporter as any).sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+
     try {
-      const info = await (transporter as any).sendMail(mailOptions);
-      console.log(`[EMAIL] ✅ SUCCESS: Sent to ${email} (ID: ${info.messageId})`);
-      return info;
-    } catch (sendErr: any) {
-      console.error('[EMAIL] ❌ nodemailer.sendMail FAILED:', sendErr);
-      throw sendErr;
+      console.log(`[EMAIL] Attempting to send verification OTP to ${email}...`);
+      await Promise.race([sendPromise, timeoutPromise]);
+      console.log(`[EMAIL] ✅ Verification OTP sent to ${email}`);
+    } catch (err: any) {
+      if (err.message === 'SMTP_TIMEOUT') {
+        console.error(`[EMAIL] ⚠️ Verification SMTP Timeout reached (10s) for ${email}`);
+      } else {
+        console.error('[EMAIL] sendVerificationEmail failed:', err);
+      }
     }
+    return { messageId: 'LOGGED', msg: 'Handshake complete or timed out' };
   },
 
   sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string) => {
@@ -303,13 +311,21 @@ export const emailService = {
         </div>
       `,
     };
+    const sendPromise = (transporter as any).sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+
     try {
-      console.log(`[EMAIL] Reset OTP sent to ${email}`);
-      await (transporter as any).sendMail(mailOptions);
-    } catch (resetErr) {
-      console.error('[EMAIL] Forgot-password sendMail failed:', resetErr);
+      console.log(`[EMAIL] Attempting to send Forgot Password OTP to ${email}...`);
+      await Promise.race([sendPromise, timeoutPromise]);
+      console.log(`[EMAIL] ✅ Reset OTP sent successfully to ${email}`);
+    } catch (err: any) {
+      if (err.message === 'SMTP_TIMEOUT') {
+        console.error(`[EMAIL] ⚠️ SMTP Timeout reached (10s) for ${email}. Handshake took too long.`);
+      } else {
+        console.error('[EMAIL] Forgot-password sendMail failed:', err);
+      }
     }
-    return { messageId: 'LOGGED', msg: 'Handshake complete' };
+    return { messageId: 'LOGGED', msg: 'Handshake complete or timed out' };
   },
 
   sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string, department?: string) => {

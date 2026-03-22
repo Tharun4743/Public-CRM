@@ -167,20 +167,6 @@ const startServer = async () => {
             console.log('⚠️ Email polling failed to start:', emailError.message);
         }
 
-        // Verify Email Connectivity on Startup
-        try {
-            const { createTransporter } = await import('./server/services/emailService.ts');
-            const transporter = createTransporter();
-            if (transporter) {
-                transporter.verify((error: any) => {
-                    if (error) console.log('⚠️ SMTP Connection Error:', error.message);
-                    else console.log('✅ SMTP Server ready');
-                });
-            }
-        } catch (emailError) {
-            console.log('⚠️ Email service initialization failed:', emailError.message);
-        }
-        
         console.log('=== PS-CRM Server Started Successfully ===');
         console.log('🌐 Server is ready to handle requests');
         

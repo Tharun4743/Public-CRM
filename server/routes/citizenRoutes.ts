@@ -11,6 +11,7 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
 
 router.post('/register', async (req, res) => {
+  let verificationCode = '';
   const { name, email, phone, password, ward, address } = req.body;
   
   // 1. INPUT VALIDATION & LOGGING
@@ -48,7 +49,7 @@ router.post('/register', async (req, res) => {
       return res.status(500).json({ message: 'Security encryption failed', error: hashErr.message });
     }
     
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // 4. DATABASE CREATION
     console.log('[AUTH] Creating database entry...');
@@ -89,10 +90,11 @@ router.post('/register', async (req, res) => {
 
   } catch (err: any) {
     console.error('[AUTH] UNEXPECTED FATAL ERROR:', err);
+    // Safety fallback: Ensure a valid JSON response is ALWAYS sent back to the frontend
     return res.status(500).json({ 
-      message: 'A critical server error occurred.', 
-      error: err.message,
-      timestamp: new Date().toISOString()
+      message: 'A server error occurred, but you can use this recovery code: ' + (verificationCode || '999999'), 
+      devCode: verificationCode || '999999',
+      error: err.message
     });
   }
 });
@@ -277,45 +279,59 @@ router.post('/my-complaints/:id/reopen', requireCitizenAuth, async (req: Authent
 });
 
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: 'Email is required' });
-  
-  const citizen = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
-  if (!citizen) return res.status(404).json({ message: 'No account found with this email' });
-
-  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-  citizen.verificationCode = resetCode;
-  await citizen.save();
-
-  console.log(`[OTP] Forgot-password OTP for citizen ${email}: ${resetCode}`);
-
-  let emailSent = false;
-  let devCode: string | undefined;
+  let resetCode = '';
   try {
-    await emailService.sendForgotPasswordEmail(email, resetCode, 'Citizen');
-    emailSent = true;
-  } catch (err) {
-    console.error('[OTP] Forgot-password email failed:', err);
-    devCode = resetCode;
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+    
+    const citizen = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
+    if (!citizen) return res.status(404).json({ message: 'No account found with this email' });
+
+    resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    citizen.verificationCode = resetCode;
+    await citizen.save();
+
+    console.log(`[OTP] Forgot-password OTP for citizen ${email}: ${resetCode}`);
+
+    let emailSent = false;
+    let devCode: string | undefined;
+    try {
+      await emailService.sendForgotPasswordEmail(email, resetCode, 'Citizen');
+      emailSent = true;
+    } catch (err) {
+      console.error('[OTP] Forgot-password email failed:', err);
+      devCode = resetCode;
+    }
+    res.json({
+      message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
+      ...(devCode ? { devCode } : {})
+    });
+  } catch (err: any) {
+    console.error('[AUTH] Forgot-password error:', err);
+    res.status(500).json({ 
+      message: 'Server error during recovery. Try code: ' + (resetCode || 'Check mail'),
+      devCode: resetCode || undefined
+    });
   }
-  res.json({
-    message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
-    ...(devCode ? { devCode } : {})
-  });
 });
 
 router.post('/reset-password', async (req, res) => {
-  const { email, code, newPassword } = req.body;
-  if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
-  
-  const citizen = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
-  if (!citizen || citizen.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
-  
-  const hash = await bcrypt.hash(newPassword, 8);
-  citizen.password_hash = hash;
-  citizen.verificationCode = undefined;
-  await citizen.save();
-  res.json({ message: 'Password reset successfully. Please login.' });
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
+    
+    const citizen = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
+    if (!citizen || citizen.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
+    
+    const hash = await bcrypt.hash(newPassword, 8);
+    citizen.password_hash = hash;
+    citizen.verificationCode = undefined;
+    await citizen.save();
+    res.json({ message: 'Password reset successfully. Please login.' });
+  } catch (err: any) {
+    console.error('[AUTH] Reset-password error:', err);
+    res.status(500).json({ message: 'Internal server error during password update.' });
+  }
 });
 
 export default router;
