@@ -58,7 +58,13 @@ export const CitizenLogin = () => {
       });
 
       console.log(`[LOGIN] Response status:`, response.status);
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('[LOGIN] Failed to parse JSON response:', e);
+        throw new Error(`Server returned ${response.status} but response was not JSON. Server might be down or restarting.`);
+      }
       console.log(`[LOGIN] Response data:`, data);
 
       if (response.ok) {

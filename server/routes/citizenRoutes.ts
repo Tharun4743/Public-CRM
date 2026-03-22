@@ -11,45 +11,56 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
 
 router.post('/register', async (req, res) => {
-  const { name, email, phone, password, ward, address } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
-  
-  const exists = await Citizen.findOne({ email: new RegExp(`^${email}$`, 'i') });
-  if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
-  
-  const hash = await bcrypt.hash(password, 8);
-  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  
   try {
-    const citizen = await Citizen.create({
-      name,
-      email,
-      phone,
-      password_hash: hash,
-      ward,
-      address,
-      isVerified: false,
-      verificationCode,
-    });
-  } catch (dbErr: any) {
-    console.error('[DB] Registration failed:', dbErr);
-    return res.status(500).json({ message: 'A database error occurred during registration.' });
-  }
-  
-  console.log(`[OTP] Registration OTP for ${email}: ${verificationCode}`);
-  let emailSent = false;
-  try {
-    await emailService.sendVerificationEmail(email, verificationCode);
-    emailSent = true;
-  } catch (err) {
-    console.error('[OTP] Email delivery failed:', err);
-  }
+    const { name, email, phone, password, ward, address } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
+    
+    // Safely escape email for RegExp to prevent SyntaxError on invalid regex characters
+    const safeEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exists = await Citizen.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
+    if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
+    
+    const hash = await bcrypt.hash(password, 8);
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    let citizen;
+    try {
+      citizen = await Citizen.create({
+        name,
+        email,
+        phone,
+        password_hash: hash,
+        ward,
+        address,
+        isVerified: false,
+        verificationCode,
+      });
+    } catch (dbErr: any) {
+      console.error('[DB] Registration failed:', dbErr);
+      return res.status(500).json({ message: `A database error occurred during registration: ${dbErr.message || 'Unknown error'}` });
+    }
+    
+    console.log(`[OTP] Registration OTP for ${email}: ${verificationCode}`);
+    let emailSent = false;
+    try {
+      await emailService.sendVerificationEmail(email, verificationCode);
+      emailSent = true;
+    } catch (err) {
+      console.error('[OTP] Email delivery failed:', err);
+    }
 
-  const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
-  res.status(201).json({ 
-    message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email failed. Use this code to verify: ${verificationCode}`,
-    ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode })
-  });
+    const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
+    return res.status(201).json({ 
+      message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email failed. Use this code to verify: ${verificationCode}`,
+      ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode }),
+      citizen: { id: citizen._id, name: citizen.name, email: citizen.email, phone: citizen.phone, ward: citizen.ward }
+    });
+  } catch (error: any) {
+    console.error('[API] /register unhandled error:', error);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'An unexpected error occurred during registration.' });
+    }
+  }
 });
 
 router.post('/login', async (req, res) => {

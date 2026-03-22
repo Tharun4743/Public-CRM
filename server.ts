@@ -43,14 +43,20 @@ const io = initSocket(httpServer);
 
 
 app.use(compression());
-app.use(cors());
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' ? (process.env.APP_URL || true) : true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-admin-key']
+};
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static("public", {
   maxAge: '1d',
   etag: true,
   lastModified: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(auditLogger);
 
 // Routes
@@ -74,6 +80,16 @@ app.use("/api/admin/db-stats", dbStatsRoutes);
 // Root endpoint for health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Global Error Handler
+import { Request, Response, NextFunction } from 'express';
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('[Global Error]', err.stack || err.message || err);
+  res.status(err.status || 500).json({ 
+    message: err.message || 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err : undefined
+  });
 });
 
 import path from 'path';

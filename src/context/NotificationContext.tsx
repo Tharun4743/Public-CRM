@@ -30,10 +30,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!user) return;
 
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? window.location.origin 
-      : 'http://localhost:3001';
-    const socket = io(socketUrl);
+    const socket = io();
 
     socket.on('connect', () => {
       socket.emit('join-room', user.id);

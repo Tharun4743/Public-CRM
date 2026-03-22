@@ -11,20 +11,28 @@ export const connectDb = async () => {
     // Use fallback MongoDB URI if not set
     const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pscrm:TEAMGOAT@ps-crm.mxwibid.mongodb.net/?appName=ps-crm';
     
-    console.log('Attempting MongoDB connection...');
-    
-    try {
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ MongoDB connected successfully');
-        await initSeedData();
-    } catch (error) {
-        console.error('❌ MongoDB connection error:', error.message);
-        if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            console.error('❌ Network error - check if MongoDB URI is correct and accessible');
-        } else if (error.message.includes('Authentication failed')) {
-            console.error('❌ Authentication failed - check MongoDB credentials');
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            await mongoose.connect(MONGODB_URI);
+            console.log('✅ MongoDB connected successfully');
+            await initSeedData();
+            return; // Success, exit retry loop
+        } catch (error: any) {
+            retries -= 1;
+            console.error(`❌ MongoDB connection error: ${error.message}. Retries left: ${retries}`);
+            if (retries === 0) {
+                if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+                    console.error('❌ Network error - check if MongoDB URI is correct and accessible');
+                } else if (error.message.includes('Authentication failed')) {
+                    console.error('❌ Authentication failed - check MongoDB credentials');
+                }
+                throw error;
+            }
+            // Wait 3 seconds before next retry
+            console.log('Waiting 3 seconds before next retry...');
+            await new Promise(res => setTimeout(res, 3000));
         }
-        throw error;
     }
 };
 
@@ -34,10 +42,12 @@ const initSeedData = async () => {
         const adminCount = await User.countDocuments({ role: 'Admin' });
         if (adminCount === 0) {
             console.log('Creating default admin user...');
+            const bcrypt = await import("bcryptjs");
+            const hashedPassword = await bcrypt.hash('admin123', 8);
             await User.create({
                 name: 'System Admin',
                 email: 'admin@ps-crm.gov',
-                password: 'admin123', // In a real app, use hashed passwords
+                password: hashedPassword,
                 role: 'Admin',
                 isVerified: true,
                 isApproved: true

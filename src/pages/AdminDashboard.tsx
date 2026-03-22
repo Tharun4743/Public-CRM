@@ -269,10 +269,7 @@ export const AdminDashboard = () => {
     if (!user || user.role !== 'Admin') return;
 
     import('socket.io-client').then(({ default: io }) => {
-      const socketUrl = process.env.NODE_ENV === 'production' 
-        ? window.location.origin 
-        : 'http://localhost:3001';
-      const socket = io(socketUrl);
+      const socket = io();
       socket.emit('join-room', 'Admin');
       socket.on('notification', (notif: any) => {
         if (notif.type === 'alert') {

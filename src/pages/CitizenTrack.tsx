@@ -45,7 +45,7 @@ export const CitizenTrack = () => {
 
   React.useEffect(() => {
     if (!complaint?.id) return;
-    const socket = io('http://localhost:3001');
+    const socket = io();
     socket.emit('join-room', complaint.id);
     socket.on('notification', () => performSearch(complaint.id, true));
     return () => { socket.disconnect(); };
