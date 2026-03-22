@@ -326,6 +326,10 @@ export const initDb = () => {
     if (!citizenColNames.includes('verificationCode')) {
         db.prepare("ALTER TABLE citizens ADD COLUMN verificationCode TEXT").run();
     }
+    if (!citizenColNames.includes('created_at')) {
+        db.prepare("ALTER TABLE citizens ADD COLUMN created_at TEXT").run();
+        db.prepare("UPDATE citizens SET created_at = ? WHERE created_at IS NULL").run(new Date().toISOString());
+    }
 
     // Migrate Users Table
     const userCols = db.prepare('PRAGMA table_info(users)').all() as any[];

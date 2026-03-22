@@ -16,10 +16,16 @@ router.post('/register', async (req, res) => {
   if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
   const hash = await bcrypt.hash(password, 8);
   const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-  db.prepare(`
-    INSERT INTO citizens (name, email, phone, password_hash, ward, isVerified, verificationCode, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(name, email, phone || null, hash, ward || null, 0, verificationCode, new Date().toISOString());
+  
+  try {
+    db.prepare(`
+      INSERT INTO citizens (name, email, phone, password_hash, ward, isVerified, verificationCode, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(name, email, phone || null, hash, ward || null, 0, verificationCode, new Date().toISOString());
+  } catch (dbErr: any) {
+    console.error('[DB] Registration failed:', dbErr);
+    return res.status(500).json({ message: 'A database error occurred during registration. Please check if this email already exists.' });
+  }
   
   console.log(`[OTP] Registration OTP for ${email}: ${verificationCode}`);
   let emailSent = false;
@@ -27,13 +33,12 @@ router.post('/register', async (req, res) => {
     await emailService.sendVerificationEmail(email, verificationCode);
     emailSent = true;
   } catch (err) {
-    console.error('[OTP] Email delivery failed, code is in logs:', err);
+    console.error('[OTP] Email delivery failed:', err);
   }
 
-  // Always return the code in demo/dev mode so sign-up never breaks
   const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
   res.status(201).json({ 
-    message: emailSent ? 'Verification code sent to your email.' : `Email delivery failed. Use this code to verify: ${verificationCode}`,
+    message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email failed. Use this code to verify: ${verificationCode}`,
     ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode })
   });
 });
