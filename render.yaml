@@ -4,7 +4,7 @@ services:
     runtime: node
     region: singapore
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: echo "Skipping build for test"
     startCommand: node test-server.js
     healthCheckPath: /api/health
     healthCheckGracePeriod: 30
