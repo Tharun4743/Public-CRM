@@ -71,6 +71,11 @@ app.use("/api/settings/sla", slaRoutes);
 app.use("/api/rewards", rewardsRoutes);
 app.use("/api/admin/db-stats", dbStatsRoutes);
 
+// Root endpoint for health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -78,8 +83,10 @@ const __dirname = path.dirname(__filename);
 
 app.get('*', (req, res) => {
   const indexPath = path.join(__dirname, 'public', 'index.html');
+  console.log('Serving file:', indexPath);
   res.sendFile(indexPath, (err) => {
     if (err) {
+      console.error('Error serving frontend:', err);
       res.status(500).send('Server Error: could not serve frontend.');
     }
   });

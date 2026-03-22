@@ -6,7 +6,8 @@ services:
     plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
-    healthCheckPath: /api/users/pending-officers
+    healthCheckPath: /api/health
+    healthCheckGracePeriod: 60
     envVars:
       - key: NODE_ENV
         value: production
@@ -37,4 +38,4 @@ services:
       - key: NODE_OPTIONS
         value: "--max-old-space-size=512"
       - key: OLLAMA_URL
-        value: "http://localhost:11434" # Or appropriate placeholder if not local
+        value: "http://localhost:11434"
