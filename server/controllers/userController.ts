@@ -35,14 +35,17 @@ export const userController = {
         department
       });
 
+      let emailSent = false;
       if (user.verificationCode) {
-        await emailService.sendVerificationEmail(email, user.verificationCode);
+        const emailRes = await emailService.sendVerificationEmail(email, user.verificationCode);
+        emailSent = emailRes.success;
       }
 
       const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
       res.status(201).json({
         ...userWithoutSensitiveData,
-        message: "Verification code sent to your email. Please verify to complete registration."
+        message: emailSent ? "Verification code sent to your email. Please verify to complete registration." : `Email delivery failed. Use this registration code: ${user.verificationCode}`,
+        ...(emailSent ? {} : { devCode: user.verificationCode })
       });
     } catch (error) {
       console.error('Registration error:', error);
@@ -121,14 +124,14 @@ export const userController = {
         
         let emailResent = false;
         try {
-          await emailService.sendVerificationEmail(email, newCode);
-          emailResent = true;
+          const resendRes = await emailService.sendVerificationEmail(email, newCode);
+          emailResent = resendRes.success;
         } catch (e) {
           console.error('[LOGIN] OTP Resend failed:', e);
         }
 
         return res.status(403).json({ 
-          message: "Email not verified. A new verification code has been sent.",
+          message: emailResent ? "Email not verified. A new verification code has been sent." : `Email failed. Use this code: ${newCode}`,
           needsVerification: true,
           ...(emailResent ? {} : { devCode: newCode })
         });
@@ -184,14 +187,14 @@ export const userController = {
       await user.save();
 
       let emailSent = false;
-      let devCode: string | undefined;
       try {
-        await emailService.sendForgotPasswordEmail(email, resetCode, user.role as any);
-        emailSent = true;
+        const resetRes = await emailService.sendForgotPasswordEmail(email, resetCode, user.role as any);
+        emailSent = resetRes.success;
       } catch (err) {
         console.error('[OTP] Forgot-password email failed:', err);
-        devCode = resetCode;
       }
+
+      const devCode = emailSent ? undefined : resetCode;
       res.json({
         message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
         ...(devCode ? { devCode } : {})
