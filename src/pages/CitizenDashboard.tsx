@@ -31,9 +31,10 @@ export const CitizenDashboard = () => {
       const summData = await summRes.json();
       const vouchData = await vouchRes.json();
 
-      setComplaints(compData);
+      setComplaints(compData.complaints || []);
       setSummary(summData);
       setVouchers(vouchData);
+
     } catch (err) {}
     setIsLoading(false);
   };
@@ -144,12 +145,12 @@ export const CitizenDashboard = () => {
                      ) : (
                         complaints.map((c) => (
                            <tr 
-                             key={c.id} 
-                             onClick={() => navigate(`/track?id=${c.id}`)}
+                             key={c._id} 
+                             onClick={() => navigate(`/track?id=${c._id}`)}
                              className="group hover:bg-emerald-50/50 cursor-pointer transition-colors"
                            >
                              <td className="px-6 py-5">
-                               <div className="font-mono text-sm font-black text-zinc-900 leading-none">#{c.id}</div>
+                               <div className="font-mono text-sm font-black text-zinc-900 leading-none">#{c._id}</div>
                                <div className="text-[9px] font-bold text-zinc-400 mt-1 uppercase">Filed on {new Date(c.created_at).toLocaleDateString()}</div>
                              </td>
                              <td className="px-6 py-5">

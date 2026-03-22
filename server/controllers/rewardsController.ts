@@ -12,8 +12,8 @@ export const rewardsController = {
       if (!citizen) return res.status(404).json({ message: "Citizen not found" });
 
       res.json({
-        totalPoints: citizen.total_points,
-        totalComplaints: citizen.total_complaints,
+        total_points: citizen.total_points,
+        total_complaints: citizen.total_complaints,
         badges: citizen.badges,
         rank: rewardsController.calculateRank(citizen.total_points)
       });
