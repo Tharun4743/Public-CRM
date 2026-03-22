@@ -14,7 +14,11 @@ export const connectDb = async () => {
     let retries = 3;
     while (retries > 0) {
         try {
-            await mongoose.connect(MONGODB_URI);
+            await mongoose.connect(MONGODB_URI, {
+                serverSelectionTimeoutMS: 15000,
+                socketTimeoutMS: 45000,
+                family: 4, // CRITICAL: Stop Render from using unreachable IPv6 routes to Atlas
+            } as any);
             console.log('✅ MongoDB connected successfully');
             await initSeedData();
             return; // Success, exit retry loop
