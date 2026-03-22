@@ -105,6 +105,12 @@ const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}`);
+    console.log('Environment variables check:');
+    console.log('- NODE_ENV:', process.env.NODE_ENV);
+    console.log('- MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
+    console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
+    console.log('- ADMIN_DB_KEY:', process.env.ADMIN_DB_KEY ? 'SET' : 'NOT SET');
+    console.log('Starting database connection...');
     await connectDb();
     slaService.startSlaMonitoring();
     emailPollingService.start();
