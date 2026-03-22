@@ -6,16 +6,22 @@ dotenv.config();
 const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
 const smtpUser = process.env.SMTP_USER || '';
 
-// Use explicit Gmail config with IPv4 force (avoids Render IPv6 routing issues)
+// High-Performance Gmail config for Render (Uses Port 465 for speed and security)
 const createTransporter = () => {
   if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // Use STARTTLS/Explicit
+      port: 465,
+      secure: true, // Faster implicit TLS on many cloud providers
       auth: { user: smtpUser, pass: smtpPass },
-      // Force IPv4 to avoid ENETUNREACH errors on IPv6 networks
-      family: 4, 
+      // Performance options
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      connectionTimeout: 3000, // Fail fast (3s) to show OTP on screen if network is slow
+      greetingTimeout: 3000,
+      socketTimeout: 5000,
+      family: 4, // Strict IPv4 to fix Render's ENETUNREACH error
       tls: {
         rejectUnauthorized: false
       }

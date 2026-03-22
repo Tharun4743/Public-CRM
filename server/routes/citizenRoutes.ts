@@ -14,7 +14,7 @@ router.post('/register', async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
   const exists = db.prepare('SELECT id FROM citizens WHERE LOWER(email)=LOWER(?)').get(email);
   if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await bcrypt.hash(password, 8);
   const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
   db.prepare(`
     INSERT INTO citizens (name, email, phone, password_hash, ward, isVerified, verificationCode, created_at)
