@@ -1,66 +1,150 @@
 import { Router } from 'express';
-import db from '../db/database.ts';
+import { Complaint } from '../models/Complaint.ts';
+import { ReportConfig, ScheduledReport } from '../models/Reporting.ts';
 
 const router = Router();
 
-const DIMENSION_MAP: Record<string, string> = {
-  Department: 'department',
-  Category: 'category',
-  Priority: 'priority',
-  Status: 'status',
-  Ward: "COALESCE((SELECT ward FROM citizens WHERE citizens.id = complaints.citizen_id), 'Unknown')",
-  Source: 'source',
-  Month: "strftime('%Y-%m', createdAt)"
-};
-const METRIC_MAP: Record<string, string> = {
-  Count: 'COUNT(*) as count',
-  'Avg Resolution Days': "AVG(CASE WHEN status='Resolved' THEN julianday(updatedAt)-julianday(createdAt) END) as avg_resolution_days",
-  'SLA Compliance %': "(SUM(CASE WHEN sla_status!='Breached' THEN 1 ELSE 0 END)*100.0/COUNT(*)) as sla_compliance_pct",
-  'Avg Satisfaction': 'AVG(satisfaction_score) as avg_satisfaction',
-  'Escalation Count': 'SUM(CASE WHEN escalation_level > 0 THEN 1 ELSE 0 END) as escalation_count'
+const DIMENSION_MAP: Record<string, any> = {
+  Department: '$department',
+  Category: '$category',
+  Priority: '$priority',
+  Status: '$status',
+  Ward: '$ward', // This might need a lookup if not in complaint, but I added it to Complaint model
+  Source: '$source',
+  Month: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }
 };
 
 router.post('/generate', async (req, res) => {
-  const { dimensions = [], metrics = ['Count'], dateFrom, dateTo } = req.body;
-  const cols = dimensions.map((d: string) => `${DIMENSION_MAP[d]} as "${d}"`).filter(Boolean);
-  const mets = metrics.map((m: string) => METRIC_MAP[m]).filter(Boolean);
-  const selectSql = [...cols, ...mets].join(', ');
-  if (!selectSql) return res.status(400).json({ message: 'Invalid configuration' });
-  let sql = `SELECT ${selectSql} FROM complaints WHERE 1=1`;
-  const params: any[] = [];
-  if (dateFrom) { sql += ' AND createdAt >= ?'; params.push(dateFrom); }
-  if (dateTo) { sql += ' AND createdAt <= ?'; params.push(dateTo); }
-  if (cols.length) sql += ` GROUP BY ${dimensions.map((d: string) => DIMENSION_MAP[d]).join(', ')}`;
-  const rows = db.prepare(sql).all(...params);
-  res.json({ columns: [...dimensions, ...metrics], rows });
+  try {
+    const { dimensions = [], metrics = ['Count'], dateFrom, dateTo } = req.body;
+    
+    const match: any = {};
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) match.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) match.createdAt.$lte = new Date(dateTo);
+    }
+
+    const group: any = { _id: {} };
+    dimensions.forEach((d: string) => {
+      group._id[d] = DIMENSION_MAP[d];
+    });
+
+    if (metrics.includes('Count')) {
+      group.count = { $sum: 1 };
+    }
+    if (metrics.includes('Avg Resolution Days')) {
+      group.avg_resolution_days = {
+        $avg: {
+          $cond: [
+            { $and: [{ $eq: ["$status", "Resolved"] }, { $ne: ["$resolved_at", null] }] },
+            { $divide: [{ $subtract: ["$resolved_at", "$createdAt"] }, 1000 * 60 * 60 * 24] },
+            null
+          ]
+        }
+      };
+    }
+    if (metrics.includes('SLA Compliance %')) {
+      group.compliant_count = { $sum: { $cond: [{ $ne: ["$sla_status", "Breached"] }, 1, 0] } };
+      group.total_for_sla = { $sum: 1 };
+    }
+    if (metrics.includes('Avg Satisfaction')) {
+      group.avg_satisfaction = { $avg: "$satisfaction_score" };
+    }
+    if (metrics.includes('Escalation Count')) {
+      group.escalation_count = { $sum: { $cond: [{ $gt: ["$escalation_level", 0] }, 1, 0] } };
+    }
+
+    const pipeline: any[] = [{ $match: match }];
+    if (dimensions.length > 0) {
+      pipeline.push({ $group: group });
+      if (metrics.includes('SLA Compliance %')) {
+        pipeline.push({
+          $project: {
+            _id: 1,
+            count: 1,
+            avg_resolution_days: 1,
+            avg_satisfaction: 1,
+            escalation_count: 1,
+            sla_compliance_pct: { $multiply: [{ $divide: ["$compliant_count", "$total_for_sla"] }, 100] }
+          }
+        });
+      }
+    } else {
+        // No dimensions, just global metrics
+        pipeline.push({ $group: { ...group, _id: null } });
+    }
+
+    const results = await Complaint.aggregate(pipeline);
+    
+    const rows = results.map(r => {
+        const row: any = {};
+        dimensions.forEach((d: string) => {
+            row[d] = r._id[d];
+        });
+        metrics.forEach((m: string) => {
+            if (m === 'Count') row[m] = r.count;
+            if (m === 'Avg Resolution Days') row[m] = r.avg_resolution_days;
+            if (m === 'SLA Compliance %') row[m] = r.sla_compliance_pct;
+            if (m === 'Avg Satisfaction') row[m] = r.avg_satisfaction;
+            if (m === 'Escalation Count') row[m] = r.escalation_count;
+        });
+        return row;
+    });
+
+    res.json({ columns: [...dimensions, ...metrics], rows });
+  } catch (error) {
+    console.error('Report Generation Error:', error);
+    res.status(500).json({ message: 'Error generating report' });
+  }
 });
 
 router.post('/config', async (req, res) => {
-  const { name, dimensions, metrics, createdBy } = req.body;
-  const result = db.prepare(`
-    INSERT INTO report_configs (name, dimensions, metrics, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(name, JSON.stringify(dimensions || []), JSON.stringify(metrics || []), createdBy || 'admin', new Date().toISOString());
-  res.status(201).json({ id: result.lastInsertRowid });
+  try {
+    const { name, dimensions, metrics, createdBy } = req.body;
+    const config = await ReportConfig.create({
+      name,
+      dimensions: JSON.stringify(dimensions || []),
+      metrics: JSON.stringify(metrics || []),
+      created_by: createdBy || 'admin'
+    });
+    res.status(201).json({ id: config._id });
+  } catch (error) {
+    res.status(500).json({ message: 'Error saving config' });
+  }
 });
 
 router.get('/config', async (_req, res) => {
-  const rows = db.prepare('SELECT * FROM report_configs ORDER BY created_at DESC').all();
-  res.json(rows);
+  try {
+    const rows = await ReportConfig.find().sort({ created_at: -1 }).lean();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching configs' });
+  }
 });
 
 router.post('/schedule', async (req, res) => {
-  const { configId, frequency, recipients } = req.body;
-  db.prepare(`
-    INSERT INTO scheduled_reports (config_id, frequency, recipients, next_run_at, is_active)
-    VALUES (?, ?, ?, ?, 1)
-  `).run(configId, frequency, JSON.stringify(recipients || []), new Date().toISOString());
-  res.status(201).json({ ok: true });
+  try {
+    const { configId, frequency, recipients } = req.body;
+    await ScheduledReport.create({
+      config_id: configId,
+      frequency,
+      recipients: JSON.stringify(recipients || []),
+      next_run_at: new Date()
+    });
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Error scheduling report' });
+  }
 });
 
 router.get('/schedule', async (_req, res) => {
-  const rows = db.prepare('SELECT * FROM scheduled_reports ORDER BY id DESC').all();
-  res.json(rows);
+  try {
+    const rows = await ScheduledReport.find().sort({ _id: -1 }).lean();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching schedules' });
+  }
 });
 
 export default router;

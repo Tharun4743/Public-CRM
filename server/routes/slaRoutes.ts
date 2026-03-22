@@ -1,30 +1,54 @@
 import { Router } from 'express';
-import db from '../db/database.ts';
+import { SLARule } from '../models/Reporting.ts';
 
 const router = Router();
 
 router.get('/rules', async (_req, res) => {
-  const rows = db.prepare('SELECT * FROM sla_rules ORDER BY id DESC').all();
-  res.json(rows);
+  try {
+    const rows = await SLARule.find().sort({ created_at: -1 }).lean();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching SLA rules' });
+  }
 });
 
 router.post('/rules', async (req, res) => {
-  const r = req.body;
-  db.prepare(`
-    INSERT INTO sla_rules (
-      category, priority, department_id, sla_hours, escalation_l1_hours, escalation_l2_hours, escalation_l3_hours, is_active, created_by, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(r.category || null, r.priority || null, r.department_id || null, r.sla_hours, r.escalation_l1_hours, r.escalation_l2_hours, r.escalation_l3_hours, r.is_active ? 1 : 0, r.created_by || 'admin', new Date().toISOString());
-  res.status(201).json({ ok: true });
+  try {
+    const r = req.body;
+    await SLARule.create({
+      category: r.category || null,
+      priority: r.priority || null,
+      department: r.department || null,
+      sla_hours: r.sla_hours,
+      escalation_l1_hours: r.escalation_l1_hours,
+      escalation_l2_hours: r.escalation_l2_hours,
+      escalation_l3_hours: r.escalation_l3_hours,
+      is_active: !!r.is_active,
+      created_by: r.created_by || 'admin'
+    });
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating SLA rule' });
+  }
 });
 
 router.put('/rules/:id', async (req, res) => {
-  const r = req.body;
-  db.prepare(`
-    UPDATE sla_rules SET category=?, priority=?, department_id=?, sla_hours=?, escalation_l1_hours=?, escalation_l2_hours=?, escalation_l3_hours=?, is_active=?
-    WHERE id=?
-  `).run(r.category || null, r.priority || null, r.department_id || null, r.sla_hours, r.escalation_l1_hours, r.escalation_l2_hours, r.escalation_l3_hours, r.is_active ? 1 : 0, req.params.id);
-  res.json({ ok: true });
+  try {
+    const r = req.body;
+    await SLARule.findByIdAndUpdate(req.params.id, {
+      category: r.category || null,
+      priority: r.priority || null,
+      department: r.department || null,
+      sla_hours: r.sla_hours,
+      escalation_l1_hours: r.escalation_l1_hours,
+      escalation_l2_hours: r.escalation_l2_hours,
+      escalation_l3_hours: r.escalation_l3_hours,
+      is_active: !!r.is_active
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating SLA rule' });
+  }
 });
 
 export default router;

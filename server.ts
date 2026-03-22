@@ -22,7 +22,7 @@ import publicRoutes from "./server/routes/publicRoutes.ts";
 import slaRoutes from "./server/routes/slaRoutes.ts";
 import rewardsRoutes from "./server/routes/rewardsRoutes.ts";
 import dbStatsRoutes from "./server/routes/dbStatsRoutes.ts";
-import { initDb } from "./server/db/database.ts";
+import { connectDb } from "./server/db/database.ts";
 import { auditLogger } from "./server/middleware/auditLogger.ts";
 import { slaService } from "./server/services/slaService.ts";
 import { emailPollingService } from "./server/services/emailPollingService.ts";
@@ -97,9 +97,9 @@ io.on("connection", (socket) => {
 // Start Server
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}`);
-    initDb();
+    await connectDb();
     slaService.startSlaMonitoring();
     emailPollingService.start();
 

@@ -3,7 +3,7 @@ import { complaintService } from "../services/complaintService.ts";
 import { emailService } from "../services/emailService.ts";
 import { duplicateService } from "../services/duplicateService.ts";
 import { ComplaintStatus } from "../../src/types.ts";
-import db from "../db/database.ts";
+import { Complaint, ComplaintCollaborator } from "../models/Complaint.ts";
 import { aiService } from "../services/aiService.ts";
 
 export const complaintController = {
@@ -11,9 +11,12 @@ export const complaintController = {
     try {
       const { description, category, forceSubmit, citizen_email, citizen_phone, contactInfo } = req.body;
       const targetEmail = citizen_email || contactInfo;
-      const past = targetEmail
-        ? (db.prepare('SELECT category FROM complaints WHERE citizen_email = ? OR contactInfo = ? ORDER BY createdAt DESC LIMIT 25').all(targetEmail, targetEmail) as any[]).map((r) => r.category)
-        : [];
+      
+      const lastComplaints = await Complaint.find({
+        $or: [{ citizen_email: targetEmail }, { contactInfo: targetEmail }]
+      }).sort({ createdAt: -1 }).limit(25).lean();
+      
+      const past = lastComplaints.map(c => c.category);
       const ai = await aiService.analyzeComplaint(description, category, past);
 
       if (!forceSubmit) {
@@ -31,7 +34,7 @@ export const complaintController = {
 
       const complaint = await complaintService.create({
         ...req.body,
-        contactInfo: targetEmail, // Ensure contactInfo is populated for legacy views
+        contactInfo: targetEmail,
         ai_priority: req.body.ai_priority || ai.suggestedPriority,
         sentiment_score: req.body.sentiment_score || ai.sentimentScore,
         urgency_level: req.body.urgency_level || ai.urgencyLevel,
@@ -41,7 +44,7 @@ export const complaintController = {
       });
       
       if (targetEmail && targetEmail.includes('@')) {
-        emailService.sendTrackingCodeEmail(targetEmail, complaint.id, complaint.category);
+        emailService.sendTrackingCodeEmail(targetEmail, complaint._id, complaint.category);
       }
       
       res.status(201).json(complaint);
@@ -91,10 +94,9 @@ export const complaintController = {
       if (!complaint) {
         return res.status(404).json({ message: "Complaint not found" });
       }
-      // Notify citizen via email
-      const targetEmail = (complaint as any).contactInfo;
+      const targetEmail = complaint.citizen_email || complaint.contactInfo;
       if (targetEmail && targetEmail.includes('@')) {
-        emailService.sendStatusUpdateEmail(targetEmail, (complaint as any).id, 'In Progress', department);
+        emailService.sendStatusUpdateEmail(targetEmail, complaint._id, 'In Progress', department);
       }
       res.json(complaint);
     } catch (error) {
@@ -109,10 +111,9 @@ export const complaintController = {
       if (!complaint) {
         return res.status(404).json({ message: "Complaint not found" });
       }
-      // Notify citizen on meaningful status changes
-      const targetEmail = (complaint as any).contactInfo;
+      const targetEmail = complaint.citizen_email || complaint.contactInfo;
       if (targetEmail && targetEmail.includes('@') && ['In Progress', 'Escalated', 'Closed'].includes(status)) {
-        emailService.sendStatusUpdateEmail(targetEmail, (complaint as any).id, status);
+        emailService.sendStatusUpdateEmail(targetEmail, complaint._id, status);
       }
       res.json(complaint);
     } catch (error) {
@@ -172,6 +173,7 @@ export const complaintController = {
       res.status(500).json({ message: "Error generating export" });
     }
   },
+
   getGeoData: async (_req: Request, res: Response) => {
     try {
       const rows = await complaintService.getGeoData();
@@ -180,6 +182,7 @@ export const complaintController = {
       res.status(500).json({ message: 'Error fetching geodata' });
     }
   },
+
   bulkUpdate: async (req: Request, res: Response) => {
     try {
       const { complaintIds, action } = req.body;
@@ -189,15 +192,16 @@ export const complaintController = {
       res.status(500).json({ message: "Error in bulk update" });
     }
   },
+
   addCollaborators: async (req: Request, res: Response) => {
     try {
       const { complaintId, departmentIds, notes } = req.body;
-      const stmt = db.prepare(`
-        INSERT INTO complaint_collaborators (complaint_id, department_id, assigned_at, sub_status, notes)
-        VALUES (?, ?, ?, 'Pending', ?)
-      `);
       for (const dep of departmentIds || []) {
-        stmt.run(complaintId, dep, new Date().toISOString(), notes || null);
+        await ComplaintCollaborator.create({
+          complaint_id: complaintId,
+          department: dep,
+          notes: notes
+        });
       }
       res.status(201).json({ ok: true });
     } catch {

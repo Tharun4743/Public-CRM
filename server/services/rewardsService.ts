@@ -1,37 +1,36 @@
-import db from '../db/database.ts';
+import { Citizen } from '../models/Citizen.ts';
+import { PointHistory, VoucherType, Voucher } from '../models/Reward.ts';
+import { Complaint } from '../models/Complaint.ts';
 
 const BADGE_RULES = [
   { id: 'first_step', name: '🌱 First Step', description: 'Submitted first complaint', condition: (c: any) => c.total_complaints >= 1 },
   { id: 'active_citizen', name: '🔥 Active Citizen', description: 'Submitted 5 complaints', condition: (c: any) => c.total_complaints >= 5 },
   { id: 'community_champion', name: '💪 Community Champion', description: 'Submitted 10 complaints', condition: (c: any) => c.total_complaints >= 10 },
-  { id: 'feedback_hero', name: '⭐ Feedback Hero', description: 'Submitted feedback 5 times', condition: (c: any) => c.feedback_count >= 5 }, // I'll need to count feedback
-  { id: 'evidence_expert', name: '📸 Evidence Expert', description: 'Uploaded photos on 5 complaints', condition: (c: any) => c.evidence_count >= 5 }, // I'll need to count photos
+  { id: 'feedback_hero', name: '⭐ Feedback Hero', description: 'Submitted feedback 5 times', condition: (c: any) => c.feedback_count >= 5 },
+  { id: 'evidence_expert', name: '📸 Evidence Expert', description: 'Uploaded photos on 5 complaints', condition: (c: any) => c.evidence_count >= 5 },
   { id: 'top_reporter', name: '🏆 Top Reporter', description: '500+ total points', condition: (c: any) => c.total_points >= 500 },
 ];
 
 export const rewardsService = {
-  awardPoints: async (citizenId: number, points: number, reason: string, complaintId?: string) => {
+  awardPoints: async (citizenId: string, points: number, reason: string, complaintId?: string) => {
     if (!citizenId) return;
 
     try {
-      const id = `PH-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-      const now = new Date().toISOString();
-
       // Save points history
-      db.prepare(`
-        INSERT INTO points_history (id, citizen_id, points, reason, complaint_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, citizenId, points, reason, complaintId || null, now);
+      await PointHistory.create({
+        citizen_id: citizenId,
+        points,
+        reason,
+        complaint_id: complaintId
+      });
 
-      // Update total points
-      db.prepare(`
-        UPDATE citizens SET total_points = total_points + ? WHERE id = ?
-      `).run(points, citizenId);
-
-      // Update total_complaints if this is a new sub
+      // Update total points and total_complaints if needed
+      const updateData: any = { $inc: { total_points: points } };
       if (reason === 'Submit complaint') {
-          db.prepare('UPDATE citizens SET total_complaints = total_complaints + 1 WHERE id = ?').run(citizenId);
+        updateData.$inc.total_complaints = 1;
       }
+
+      await Citizen.findByIdAndUpdate(citizenId, updateData);
 
       await rewardsService.checkAndAwardBadges(citizenId);
     } catch (error) {
@@ -39,49 +38,45 @@ export const rewardsService = {
     }
   },
 
-  checkAndAwardBadges: async (citizenId: number) => {
-    const citizen = db.prepare('SELECT * FROM citizens WHERE id = ?').get(citizenId) as any;
+  checkAndAwardBadges: async (citizenId: string) => {
+    const citizen = await Citizen.findById(citizenId);
     if (!citizen) return;
 
-    const currentBadges = JSON.parse(citizen.badges || '[]');
+    const feedbackCount = await Complaint.countDocuments({ citizen_id: citizenId, feedback_submitted: true });
+    const evidenceCount = await Complaint.countDocuments({ citizen_id: citizenId, complaint_image: { $exists: true, $ne: null } });
+
     const stats: any = {
       total_complaints: citizen.total_complaints,
       total_points: citizen.total_points,
-      feedback_count: (db.prepare(`
-        SELECT COUNT(*) as count FROM complaints 
-        WHERE citizen_id = ? AND feedback_submitted = 1
-      `).get(citizenId) as any).count,
-      evidence_count: (db.prepare(`
-        SELECT COUNT(*) as count FROM complaints 
-        WHERE citizen_id = ? AND complaint_image IS NOT NULL
-      `).get(citizenId) as any).count
+      feedback_count: feedbackCount,
+      evidence_count: evidenceCount
     };
 
-    const newBadges = [...currentBadges];
+    const newBadges = [...citizen.badges];
     let awarded = false;
 
     for (const rule of BADGE_RULES) {
-      if (!currentBadges.includes(rule.id) && rule.condition(stats)) {
+      if (!newBadges.includes(rule.id) && rule.condition(stats)) {
         newBadges.push(rule.id);
         awarded = true;
       }
     }
 
     if (awarded) {
-      db.prepare('UPDATE citizens SET badges = ? WHERE id = ?')
-        .run(JSON.stringify(newBadges), citizenId);
+      citizen.badges = newBadges;
+      await citizen.save();
     }
   },
 
   getVoucherTypes: async () => {
-    return db.prepare('SELECT * FROM voucher_types WHERE is_active = 1').all();
+    return await VoucherType.find({ is_active: true }).lean();
   },
 
-  redeemVoucher: async (citizenId: number, voucherTypeId: string) => {
-    const voucherType = db.prepare('SELECT * FROM voucher_types WHERE id = ? AND is_active = 1').get(voucherTypeId) as any;
+  redeemVoucher: async (citizenId: string, voucherTypeId: string) => {
+    const voucherType = await VoucherType.findOne({ _id: voucherTypeId, is_active: true });
     if (!voucherType) throw new Error('Voucher type not found or inactive');
 
-    const citizen = db.prepare('SELECT total_points, email FROM citizens WHERE id = ?').get(citizenId) as any;
+    const citizen = await Citizen.findById(citizenId);
     if (!citizen || citizen.total_points < voucherType.points_required) {
       throw new Error('Insufficient points');
     }
@@ -90,31 +85,26 @@ export const rewardsService = {
       throw new Error('Voucher out of stock');
     }
 
-    const voucherId = `VOU-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     const code = `REWARD-${Math.random().toString(36).substr(2, 6).toUpperCase()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    const now = new Date();
-    const expiry = new Date(now);
-    expiry.setDate(now.getDate() + 30);
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
 
-    const tx = db.transaction(() => {
-      // Deduct points
-      db.prepare('UPDATE citizens SET total_points = total_points - ? WHERE id = ?')
-        .run(voucherType.points_required, citizenId);
+    // Mongoose transaction or individual updates (keeping it simple for now)
+    citizen.total_points -= voucherType.points_required;
+    await citizen.save();
 
-      // Save voucher
-      db.prepare(`
-        INSERT INTO vouchers (id, citizen_id, code, title, description, points_required, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(voucherId, citizenId, code, voucherType.title, voucherType.description, voucherType.points_required, expiry.toISOString(), now.toISOString());
-
-      // Reduce availability
-      db.prepare('UPDATE voucher_types SET total_available = total_available - 1 WHERE id = ?')
-        .run(voucherTypeId);
+    await Voucher.create({
+      citizen_id: citizenId,
+      code,
+      title: voucherType.title,
+      description: voucherType.description,
+      points_required: voucherType.points_required,
+      expires_at: expiry
     });
 
-    tx();
+    voucherType.total_available -= 1;
+    await voucherType.save();
 
-    // Send email via emailService
     return { code, title: voucherType.title, email: citizen.email };
   }
 };

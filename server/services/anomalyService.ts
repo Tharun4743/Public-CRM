@@ -1,5 +1,5 @@
-import db from '../db/database.ts';
-import { v4 as uuidv4 } from 'uuid';
+import { Complaint } from '../models/Complaint.ts';
+import { AnomalyAlert } from '../models/System.ts';
 import { notificationService } from './notificationService.ts';
 
 export const anomalyService = {
@@ -7,31 +7,31 @@ export const anomalyService = {
     console.log('[ANOMALY] Starting predictive detection scan...');
     
     // Group counts for past 24h
-    const currentCounts = db.prepare(`
-      SELECT category, department as area, COUNT(*) as count 
-      FROM complaints 
-      WHERE createdAt >= datetime('now', '-1 day')
-      GROUP BY category, area
-    `).all() as any[];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const currentCounts = await Complaint.aggregate([
+      { $match: { createdAt: { $gte: yesterday } } },
+      { $group: { _id: { category: "$category", area: "$department" }, count: { $sum: 1 } } }
+    ]);
 
     // Group counts for past 7 days (average per day)
-    const historyCounts = db.prepare(`
-       SELECT category, department as area, COUNT(*) / 7.0 as avg_count
-       FROM complaints 
-       WHERE createdAt >= datetime('now', '-7 days') AND createdAt < datetime('now', '-1 day')
-       GROUP BY category, area
-    `).all() as any[];
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const historyCounts = await Complaint.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo, $lt: yesterday } } },
+      { $group: { _id: { category: "$category", area: "$department" }, count: { $sum: 1 } } },
+      { $project: { _id: 1, avg_count: { $divide: ["$count", 6] } } } // 6 days in the period
+    ]);
 
     for (const curr of currentCounts) {
-       const hist = historyCounts.find(h => h.category === curr.category && h.area === curr.area);
-       const avg = hist ? hist.avg_count : 0.5; // handle cases where there was no history
+       const hist = historyCounts.find(h => h._id.category === curr._id.category && h._id.area === curr._id.area);
+       const avg = hist ? hist.avg_count : 0.5;
 
-       // Trigger AI scan if count > 2 and count > (avg * 3) 
        if (curr.count > 2 && curr.count > (avg * 3)) {
-          console.log(`[ANOMALY] Potential spike detected in ${curr.category} at ${curr.area}. Current: ${curr.count}, Avg: ${avg}. Validating via AI...`);
-          
           const magnitude = `${(curr.count / avg).toFixed(1)}x over average`;
-          await anomalyService.consultAI(curr.category, curr.area, curr.count, avg, magnitude);
+          await anomalyService.consultAI(curr._id.category, curr._id.area, curr.count, avg, magnitude);
        }
     }
   },
@@ -56,11 +56,12 @@ export const anomalyService = {
       const aiResponse = JSON.parse(data.response.match(/\{.*\}/s)[0]);
 
       if (aiResponse.isAnomaly) {
-         const id = `ALRT-${uuidv4().substring(0, 8).toUpperCase()}`;
-         db.prepare(`
-           INSERT INTO anomaly_alerts (id, detected_at, category, area, spike_magnitude, ai_suggestion)
-           VALUES (?, ?, ?, ?, ?, ?)
-         `).run(id, new Date().toISOString(), category, area, magnitude, aiResponse.suggestion);
+         await AnomalyAlert.create({
+           category,
+           area,
+           spike_magnitude: magnitude,
+           ai_suggestion: aiResponse.suggestion
+         });
 
          await notificationService.create(null, null, 'alert', `CRITICAL ANOMALY: ${category} spike detected in ${area}. AI suggests: ${aiResponse.suggestion}`);
       }
@@ -70,20 +71,19 @@ export const anomalyService = {
   },
 
   getActiveAlerts: async () => {
-    // Return all alerts from the last 24h that are not acknowledged
-    return db.prepare(`
-      SELECT * FROM anomaly_alerts 
-      WHERE is_acknowledged = 0 
-      AND detected_at >= datetime('now', '-1 day')
-      ORDER BY detected_at DESC
-    `).all() as any[];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return await AnomalyAlert.find({
+      is_acknowledged: false,
+      detected_at: { $gte: yesterday }
+    }).sort({ detected_at: -1 }).lean();
   },
 
   acknowledgeAlert: async (id: string, adminId: string) => {
-    db.prepare(`
-      UPDATE anomaly_alerts 
-      SET is_acknowledged = 1, acknowledged_by = ?, acknowledged_at = ? 
-      WHERE id = ?
-    `).run(adminId, new Date().toISOString(), id);
+    await AnomalyAlert.findByIdAndUpdate(id, {
+      is_acknowledged: true,
+      acknowledged_by: adminId,
+      acknowledged_at: new Date()
+    });
   }
 };

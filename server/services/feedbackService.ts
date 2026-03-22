@@ -1,4 +1,4 @@
-import db from '../db/database.ts';
+import { Complaint, Feedback } from '../models/Complaint.ts';
 import { emailService } from './emailService.ts';
 import { notificationService } from './notificationService.ts';
 import { rewardsService } from './rewardsService.ts';
@@ -6,50 +6,51 @@ import { ComplaintStatus } from '../../src/types.ts';
 
 export const feedbackService = {
   getComplaintByToken: async (token: string) => {
-    const feedback = db.prepare('SELECT * FROM feedback WHERE token = ? AND token_used = 0').get(token) as any;
+    const feedback = await Feedback.findOne({ token, token_used: false });
     if (!feedback) return null;
-    return db.prepare('SELECT * FROM complaints WHERE id = ?').get(feedback.complaint_id) as any;
+    return await Complaint.findById(feedback.complaint_id).lean();
   },
 
   submitFeedback: async (token: string, rating: number, comment: string) => {
-    const feedback = db.prepare('SELECT * FROM feedback WHERE token = ? AND token_used = 0').get(token) as any;
+    const feedback = await Feedback.findOne({ token, token_used: false });
     if (!feedback) throw new Error('Invalid or expired token');
 
     const complaintId = feedback.complaint_id;
-    const now = new Date().toISOString();
+    const now = new Date();
 
     // 1. Mark token as used and save feedback
-    db.prepare(`
-      UPDATE feedback 
-      SET token_used = 1, rating = ?, comment = ?, submitted_at = ? 
-      WHERE id = ?
-    `).run(rating, comment, now, feedback.id);
+    feedback.token_used = true;
+    feedback.rating = rating;
+    feedback.comment = comment;
+    feedback.submitted_at = now as any;
+    await feedback.save();
 
-    db.prepare(`
-      UPDATE complaints 
-      SET satisfaction_score = ?, feedback_submitted = 1 
-      WHERE id = ?
-    `).run(rating, complaintId);
+    const complaint = await Complaint.findByIdAndUpdate(complaintId, {
+      satisfaction_score: rating,
+      feedback_submitted: true,
+      updatedAt: now
+    }, { new: true });
 
-    const complaint = db.prepare('SELECT * FROM complaints WHERE id = ?').get(complaintId) as any;
+    if (!complaint) throw new Error('Complaint not found');
     
     // REWARDS: Feedback bonus
     if (complaint.citizen_id) {
-        await rewardsService.awardPoints(complaint.citizen_id, 10, 'Submit feedback', complaintId);
+        await rewardsService.awardPoints(complaint.citizen_id.toString(), 10, 'Submit feedback', complaintId?.toString());
     }
 
     // 3. Handle low rating (< 3 stars)
     if (rating < 3) {
       // Re-open complaint
-      db.prepare("UPDATE complaints SET status = ?, updatedAt = ? WHERE id = ?")
-        .run(ComplaintStatus.IN_PROGRESS, now, complaintId);
+      complaint.status = ComplaintStatus.IN_PROGRESS as any;
+      await complaint.save();
 
       // Notify Admin
-      await notificationService.create(null, complaintId, 'alert', `NEGATIVE FEEDBACK: Complaint ${complaintId} has been re-opened due to 1/2 star rating.`);
+      await notificationService.create(null, complaintId?.toString(), 'alert', `NEGATIVE FEEDBACK: Complaint ${complaintId} has been re-opened due to 1/2 star rating.`);
 
       // Send Apology Email
-      if (complaint.contactInfo && complaint.contactInfo.includes('@')) {
-        await emailService.sendApologyEmail(complaint.contactInfo, complaintId);
+      const targetEmail = complaint.citizen_email || complaint.contactInfo;
+      if (targetEmail && targetEmail.includes('@')) {
+        await emailService.sendApologyEmail(targetEmail, complaintId?.toString() || '');
       }
 
       return { success: true, message: 'Your feedback was received and we are truly sorry. Your case has been re-opened for investigation.' };

@@ -1,67 +1,44 @@
-import { User, UserRole } from "../../src/types.ts";
-import { v4 as uuidv4 } from 'uuid';
-import db from '../db/database.ts';
+import { User as UserType, UserRole } from "../../src/types.ts";
+import { User } from '../models/User.ts';
 
 export const userService = {
-  register: async (userData: Omit<User, 'id'>): Promise<User> => {
-    const newUser: User = {
+  register: async (userData: Omit<UserType, 'id'>): Promise<any> => {
+    const isVerified = userData.role === UserRole.ADMIN;
+    const isApproved = userData.role === UserRole.ADMIN;
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const user = await User.create({
       ...userData,
-      id: `USR-${uuidv4().slice(0, 8).toUpperCase()}`,
-      isVerified: userData.role === UserRole.ADMIN ? true : false,
-      verificationCode: Math.floor(100000 + Math.random() * 900000).toString(),
-      isApproved: userData.role === UserRole.ADMIN ? true : false,
-    };
+      isVerified,
+      isApproved,
+      verificationCode
+    });
 
-    const stmt = db.prepare(`
-        INSERT INTO users (id, name, email, password, role, department, isVerified, verificationCode, isApproved)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      newUser.id,
-      newUser.name,
-      newUser.email,
-      newUser.password || null,
-      newUser.role,
-      newUser.department || null,
-      newUser.isVerified ? 1 : 0,
-      newUser.verificationCode || null,
-      newUser.isApproved ? 1 : 0
-    );
-
-    return newUser;
+    return user.toObject();
   },
 
-  findByEmail: async (email: string): Promise<User | undefined> => {
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
-    if (!user) return undefined;
-    return {
-      ...user,
-      isVerified: !!user.isVerified,
-      isApproved: !!user.isApproved
-    };
+  findByEmail: async (email: string): Promise<any> => {
+    const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
+    return user ? user.toObject() : undefined;
   },
 
   verifyUser: async (email: string, code: string): Promise<boolean> => {
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as any;
+    const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
     if (user && user.verificationCode === code) {
-      db.prepare('UPDATE users SET isVerified = 1, verificationCode = NULL WHERE id = ?').run(user.id);
+      user.isVerified = true;
+      user.verificationCode = undefined;
+      await user.save();
       return true;
     }
     return false;
   },
 
   updateVerificationCode: async (email: string, code: string): Promise<void> => {
-    db.prepare('UPDATE users SET verificationCode = ? WHERE LOWER(email) = LOWER(?)').run(code, email);
+    await User.updateOne({ email: new RegExp(`^${email}$`, 'i') }, { verificationCode: code });
   },
 
-  getAll: async (): Promise<User[]> => {
-    const users = db.prepare('SELECT * FROM users').all() as any[];
-    return users.map(u => ({
-      ...u,
-      isVerified: !!u.isVerified,
-      isApproved: !!u.isApproved
-    }));
+  getAll: async (): Promise<any[]> => {
+    const users = await User.find();
+    return users.map(u => u.toObject());
   }
 };
-

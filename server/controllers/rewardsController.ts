@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import db from "../db/database.ts";
+import { Citizen } from "../models/Citizen.ts";
+import { PointHistory, VoucherType, Voucher } from "../models/Reward.ts";
 import { rewardsService } from "../services/rewardsService.ts";
 import { emailService } from "../services/emailService.ts";
 
@@ -7,13 +8,13 @@ export const rewardsController = {
   getSummary: async (req: Request, res: Response) => {
     try {
       const citizenId = (req as any).citizen?.id;
-      const citizen = db.prepare('SELECT total_points, total_complaints, badges FROM citizens WHERE id = ?').get(citizenId) as any;
+      const citizen = await Citizen.findById(citizenId).lean();
       if (!citizen) return res.status(404).json({ message: "Citizen not found" });
 
       res.json({
         totalPoints: citizen.total_points,
         totalComplaints: citizen.total_complaints,
-        badges: JSON.parse(citizen.badges || '[]'),
+        badges: citizen.badges,
         rank: rewardsController.calculateRank(citizen.total_points)
       });
     } catch (error) {
@@ -32,7 +33,7 @@ export const rewardsController = {
   getHistory: async (req: Request, res: Response) => {
     try {
       const citizenId = (req as any).citizen?.id;
-      const history = db.prepare('SELECT * FROM points_history WHERE citizen_id = ? ORDER BY created_at DESC LIMIT 10').all(citizenId);
+      const history = await PointHistory.find({ citizen_id: citizenId }).sort({ created_at: -1 }).limit(10).lean();
       res.json(history);
     } catch (error) {
       res.status(500).json({ message: "Error fetching points history" });
@@ -66,7 +67,7 @@ export const rewardsController = {
   getMyVouchers: async (req: Request, res: Response) => {
     try {
       const citizenId = (req as any).citizen?.id;
-      const vouchers = db.prepare('SELECT * FROM vouchers WHERE citizen_id = ? ORDER BY created_at DESC').all(citizenId);
+      const vouchers = await Voucher.find({ citizen_id: citizenId }).sort({ created_at: -1 }).lean();
       res.json(vouchers);
     } catch (error) {
        res.status(500).json({ message: "Error fetching your vouchers" });
@@ -75,12 +76,7 @@ export const rewardsController = {
 
   getLeaderboard: async (_req: Request, res: Response) => {
     try {
-      const top = db.prepare(`
-        SELECT name, total_points 
-        FROM citizens 
-        ORDER BY total_points DESC 
-        LIMIT 10
-      `).all() as any[];
+      const top = await Citizen.find().sort({ total_points: -1 }).limit(10).select('name total_points').lean();
 
       const leaderboard = top.map(c => {
         const names = c.name.split(' ');
@@ -100,11 +96,12 @@ export const rewardsController = {
   createVoucherType: async (req: Request, res: Response) => {
     try {
         const { title, description, points_required, total_available } = req.body;
-        const id = `VT-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        db.prepare(`
-            INSERT INTO voucher_types (id, title, description, points_required, total_available, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).run(id, title, description, points_required, total_available, new Date().toISOString());
+        await VoucherType.create({
+            title,
+            description,
+            points_required,
+            total_available
+        });
         res.status(201).json({ success: true });
     } catch (error) {
         res.status(500).json({ message: "Error creating voucher type" });
@@ -113,13 +110,11 @@ export const rewardsController = {
 
   getAllRedeemedVouchers: async (_req: Request, res: Response) => {
       try {
-          const vouchers = db.prepare(`
-              SELECT v.*, c.name as citizenName
-              FROM vouchers v
-              JOIN citizens c ON v.citizen_id = c.id
-              ORDER BY v.created_at DESC
-          `).all();
-          res.json(vouchers);
+          const vouchers = await Voucher.find().populate('citizen_id', 'name').sort({ created_at: -1 }).lean();
+          res.json(vouchers.map((v: any) => ({
+              ...v,
+              citizenName: v.citizen_id?.name
+          })));
       } catch (error) {
           res.status(500).json({ message: "Error fetching redeems" });
       }

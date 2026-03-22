@@ -1,37 +1,35 @@
-import db from '../db/database.ts';
+import { AuditLog } from '../models/System.ts';
 
 export const auditService = {
   getLogs: async (filters: { complaint_id?: string, user_id?: string, dateFrom?: string, dateTo?: string }, page: number = 1) => {
     const limit = 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    let query = 'SELECT * FROM audit_log WHERE 1=1';
-    const params: any[] = [];
+    const query: any = {};
 
-    if (filters.complaint_id && filters.complaint_id !== '') {
-      query += ' AND complaint_id = ?';
-      params.push(filters.complaint_id);
+    if (filters.complaint_id) {
+      query.complaint_id = filters.complaint_id;
     }
-    if (filters.user_id && filters.user_id !== '') {
-      query += ' AND user_id = ?';
-      params.push(filters.user_id);
+    if (filters.user_id) {
+      query.user_id = filters.user_id;
     }
-    if (filters.dateFrom && filters.dateFrom !== '') {
-      query += ' AND created_at >= ?';
-      params.push(filters.dateFrom);
-    }
-    if (filters.dateTo && filters.dateTo !== '') {
-      query += ' AND created_at <= ?';
-      params.push(filters.dateTo + 'T23:59:59');
+    if (filters.dateFrom || filters.dateTo) {
+      query.createdAt = {};
+      if (filters.dateFrom) query.createdAt.$gte = new Date(filters.dateFrom);
+      if (filters.dateTo) query.createdAt.$lte = new Date(filters.dateTo + 'T23:59:59');
     }
 
-    const total = db.prepare(`SELECT COUNT(*) as count FROM (${query})`).get(...params) as { count: number };
-    const logs = db.prepare(`${query} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[];
+    const total = await AuditLog.countDocuments(query);
+    const logs = await AuditLog.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
     return {
       logs,
-      total: total.count,
-      totalPages: Math.ceil(total.count / limit),
+      total,
+      totalPages: Math.ceil(total / limit),
       currentPage: page
     };
   }

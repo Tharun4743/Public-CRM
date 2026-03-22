@@ -2,25 +2,21 @@ import { Request, Response } from "express";
 import { userService } from "../services/userService.ts";
 import { emailService } from "../services/emailService.ts";
 import { UserRole } from "../../src/types.ts";
+import { User } from "../models/User.ts";
 
 export const userController = {
   register: async (req: Request, res: Response) => {
     try {
       const { name, email, password, role, department } = req.body;
       
-      // Basic validation
       if (!name || !email || !password || !role) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Enforce Admin password
       if (role === UserRole.ADMIN && password !== "@Nammatha") {
         return res.status(403).json({ message: "Invalid Admin authorization password" });
       }
 
-
-
-      // Check if user already exists
       const existingUser = await userService.findByEmail(email);
       if (existingUser) {
         return res.status(409).json({ message: "User with this email already exists" });
@@ -29,17 +25,15 @@ export const userController = {
       const user = await userService.register({
         name,
         email,
-        password, // FUTURE: Hash the password before storing
+        password,
         role: role as UserRole,
         department
       });
 
-      // Send verification email
       if (user.verificationCode) {
         await emailService.sendVerificationEmail(email, user.verificationCode);
       }
 
-      // Don't return the password or verification code in the response
       const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
       res.status(201).json({
         ...userWithoutSensitiveData,
@@ -86,7 +80,6 @@ export const userController = {
         return res.status(400).json({ message: "User is already verified" });
       }
 
-      // Generate a new code and update the user
       const newCode = Math.floor(100000 + Math.random() * 900000).toString();
       await userService.updateVerificationCode(email, newCode);
       
@@ -102,7 +95,6 @@ export const userController = {
   login: async (req: Request, res: Response) => {
     try {
       const { email, password, role } = req.body;
-      
       const user = await userService.findByEmail(email);
       
       if (!user || user.password !== password || user.role !== role) {
@@ -122,7 +114,6 @@ export const userController = {
         });
       }
 
-      // Don't return the password or verification code in the response
       const { password: _, verificationCode: __, ...userWithoutSensitiveData } = user;
       res.status(200).json(userWithoutSensitiveData);
     } catch (error) {
@@ -136,9 +127,7 @@ export const userController = {
       const { officerId } = req.body;
       if (!officerId) return res.status(400).json({ message: "Officer ID required" });
       
-      const db = (await import('../db/database.ts')).default;
-      db.prepare('UPDATE users SET isApproved = 1 WHERE id = ?').run(officerId);
-      
+      await User.findByIdAndUpdate(officerId, { isApproved: true });
       res.json({ message: "Officer approved successfully" });
     } catch (error) {
       console.error('Approval error:', error);
@@ -148,8 +137,7 @@ export const userController = {
 
   getPendingOfficers: async (req: Request, res: Response) => {
     try {
-      const db = (await import('../db/database.ts')).default;
-      const officers = db.prepare("SELECT id, name, email, department, isVerified FROM users WHERE role = 'Officer' AND isApproved = 0").all();
+      const officers = await User.find({ role: 'Officer', isApproved: false }).lean();
       res.json(officers);
     } catch (error) {
       console.error('Error fetching pending officers:', error);
@@ -161,13 +149,13 @@ export const userController = {
     try {
       const { email } = req.body;
       if (!email) return res.status(400).json({ message: 'Email is required' });
-      const db = (await import('../db/database.ts')).default;
-      const user = db.prepare('SELECT * FROM users WHERE LOWER(email)=LOWER(?)').get(email) as any;
+     
+      const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
       if (!user) return res.status(404).json({ message: 'No account found with this email' });
 
       const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-      db.prepare('UPDATE users SET verificationCode = ? WHERE id = ?').run(resetCode, user.id);
-      console.log(`[OTP] Forgot-password OTP for ${user.role} ${email}: ${resetCode}`);
+      user.verificationCode = resetCode;
+      await user.save();
 
       let emailSent = false;
       let devCode: string | undefined;
@@ -191,11 +179,13 @@ export const userController = {
     try {
       const { email, code, newPassword } = req.body;
       if (!email || !code || !newPassword) return res.status(400).json({ message: 'All fields required' });
-      const db = (await import('../db/database.ts')).default;
-      const user = db.prepare('SELECT * FROM users WHERE LOWER(email)=LOWER(?)').get(email) as any;
+      
+      const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
       if (!user || user.verificationCode !== code) return res.status(400).json({ message: 'Invalid or expired OTP' });
-      // Store plain for now (hash on next login upgrade)
-      db.prepare('UPDATE users SET password = ?, verificationCode = NULL WHERE id = ?').run(newPassword, user.id);
+
+      user.password = newPassword;
+      user.verificationCode = undefined;
+      await user.save();
       res.json({ message: 'Password reset successfully. Please login.' });
     } catch (error) {
       res.status(500).json({ message: 'Error resetting password' });

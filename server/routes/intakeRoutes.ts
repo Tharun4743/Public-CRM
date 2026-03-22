@@ -26,12 +26,12 @@ router.post('/whatsapp', async (req, res) => {
       await client.messages.create({
         from: process.env.TWILIO_WHATSAPP_FROM,
         to: from,
-        body: `PS-CRM: Complaint registered. Tracking ID: ${complaint.id}. Expected SLA: ${complaint.sla_deadline || 'Standard window'}.`
+        body: `PS-CRM: Complaint registered. Tracking ID: ${complaint._id}. Expected SLA: ${complaint.sla_deadline || 'Standard window'}.`
       });
     }
 
     const twiml = new twilio.twiml.MessagingResponse();
-    twiml.message(`Complaint received. Tracking ID: ${complaint.id}`);
+    twiml.message(`Complaint received. Tracking ID: ${complaint._id}`);
     res.type('text/xml').send(twiml.toString());
   } catch (e) {
     res.status(500).json({ message: 'intake failed' });

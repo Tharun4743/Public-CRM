@@ -33,7 +33,7 @@ export const emailPollingService = {
               department: 'Unassigned',
               source: 'email'
             });
-            if (from) emailService.sendTrackingCodeEmail(from, complaint.id, complaint.category);
+            if (from) emailService.sendTrackingCodeEmail(from, complaint._id, complaint.category);
             await client.messageFlagsAdd(msg.seq, ['\\Seen']);
           }
         } finally {

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
 
 export interface AuthenticatedRequest extends Request {
-  citizen?: { id: number; email: string; role: string };
+  citizen?: { id: string; email: string; role: string };
 }
 
 export const requireCitizenAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import db from '../db/database.ts';
-import { v4 as uuidv4 } from 'uuid';
+import { Complaint } from '../models/Complaint.ts';
+import { AuditLog } from '../models/System.ts';
 
 export const auditLogger = async (req: Request, res: Response, next: NextFunction) => {
   // Only intercept state-changing methods
@@ -17,7 +17,7 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
   // Get user from headers (assuming frontend sends these until JWT is implemented)
   const userId = req.headers['x-user-id'] as string || 'anonymous';
   const userRole = req.headers['x-user-role'] as string || 'visitor';
-  const ipAddress = req.ip || req.connection.remoteAddress;
+  const ipAddress = (req.ip || (req.socket as any).remoteAddress) as string;
 
   // Extract complaint ID if present in the URL
   let complaintId: string | null = null;
@@ -30,7 +30,7 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
   let oldValue: any = null;
   if (complaintId && (req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE')) {
     try {
-      oldValue = db.prepare('SELECT * FROM complaints WHERE id = ?').get(complaintId);
+      oldValue = await Complaint.findById(complaintId).lean();
     } catch (err) {
       console.error('Audit Logger: Error fetching old value', err);
     }
@@ -44,43 +44,40 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
 
     // Only log successful operations
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      let newValue: any = null;
-      if (complaintId && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
-        try {
-           newValue = db.prepare('SELECT * FROM complaints WHERE id = ?').get(complaintId);
-        } catch (err) {}
-      } else if (!complaintId && req.method === 'POST') {
-         // Maybe the ID is in the response body?
-         try {
-           const parsedBody = JSON.parse(body);
-           if (parsedBody.id) {
-             newValue = db.prepare('SELECT * FROM complaints WHERE id = ?').get(parsedBody.id);
-             complaintId = parsedBody.id;
-           }
-         } catch (err) {}
-      }
+      (async () => {
+        let newValue: any = null;
+        if (complaintId && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+          try {
+             newValue = await Complaint.findById(complaintId).lean();
+          } catch (err) {}
+        } else if (!complaintId && req.method === 'POST') {
+           // Maybe the ID is in the response body?
+           try {
+             const parsedBody = JSON.parse(body);
+             const bodyId = parsedBody._id || parsedBody.id;
+             if (bodyId) {
+               newValue = await Complaint.findById(bodyId).lean();
+               complaintId = bodyId;
+             }
+           } catch (err) {}
+        }
 
-      const auditId = uuidv4();
-      const action = `${req.method} ${req.path}`;
-      
-      try {
-        db.prepare(`
-          INSERT INTO audit_log (id, user_id, user_role, action, complaint_id, old_value, new_value, ip_address, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          auditId, 
-          userId, 
-          userRole, 
-          action, 
-          complaintId, 
-          JSON.stringify(oldValue), 
-          JSON.stringify(newValue), 
-          ipAddress, 
-          new Date().toISOString()
-        );
-      } catch (err) {
-        console.error('Audit Logger: Error saving log', err);
-      }
+        const action = `${req.method} ${req.path}`;
+        
+        try {
+          await AuditLog.create({
+            user_id: userId,
+            user_role: userRole,
+            action,
+            complaint_id: (complaintId && complaintId.length === 24) ? complaintId : undefined, // only if valid ObjectId string or mixed
+            old_value: JSON.stringify(oldValue),
+            new_value: JSON.stringify(newValue),
+            ip_address: ipAddress
+          });
+        } catch (err) {
+          console.error('Audit Logger: Error saving log', err);
+        }
+      })();
     }
 
     return response;

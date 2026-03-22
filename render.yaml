@@ -32,3 +32,9 @@ services:
         generateValue: true
       - key: ADMIN_EMAIL
         sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
+      - key: OLLAMA_URL
+        value: "http://localhost:11434" # Or appropriate placeholder if not local

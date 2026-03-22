@@ -1,49 +1,47 @@
-import db from "../db/database.ts";
+import { Notification } from '../models/System.ts';
 import { io } from "../../server.ts";
-import { v4 as uuidv4 } from 'uuid';
 
 export const notificationService = {
   create: async (userId: string | null, complaintId: string | null, type: string, message: string) => {
-    const id = uuidv4();
-    const createdAt = new Date().toISOString();
-    
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, complaint_id, type, message, is_read, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, userId, complaintId, type, message, 0, createdAt);
+    const notification = await Notification.create({
+      user_id: userId,
+      complaint_id: complaintId,
+      type,
+      message,
+      is_read: false
+    });
 
-    const notification = { id, user_id: userId, complaint_id: complaintId, type, message, is_read: 0, created_at: createdAt };
+    const notificationObj = notification.toObject();
 
     // Emit to specific users/room
     if (userId) {
-      io.to(userId).emit("notification", notification);
+      io.to(userId).emit("notification", notificationObj);
     }
     
     if (complaintId) {
-       io.to(complaintId).emit("notification", notification);
+       io.to(complaintId).emit("notification", notificationObj);
     }
 
     // Admins always get notifications
-    io.to("Admin").emit("notification", notification);
+    io.to("Admin").emit("notification", notificationObj);
 
-    return notification;
+    return notificationObj;
   },
 
   getForUser: async (userId: string) => {
-    // Get notifications for user or where they are an admin
-    return db.prepare(`
-      SELECT * FROM notifications 
-      WHERE user_id = ? OR user_id IS NULL
-      ORDER BY created_at DESC 
-      LIMIT 50
-    `).all(userId) as any[];
+    return await Notification.find({
+      $or: [{ user_id: userId }, { user_id: null }]
+    }).sort({ createdAt: -1 }).limit(50).lean();
   },
 
   markAsRead: async (id: string) => {
-    return db.prepare("UPDATE notifications SET is_read = 1 WHERE id = ?").run(id);
+    await Notification.findByIdAndUpdate(id, { is_read: true });
   },
 
   markAllAsRead: async (userId: string) => {
-    return db.prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL").run(userId);
+    await Notification.updateMany(
+      { $or: [{ user_id: userId }, { user_id: null }] },
+      { is_read: true }
+    );
   }
 };
