@@ -22,10 +22,16 @@ router.post('/register', async (req, res) => {
 
   try {
     // 2. DUPLICATE CHECK
-    const safeEmail = email.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const existingCitizen = await Citizen.findOne({ 
-      email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } 
-    });
+    let existingCitizen;
+    try {
+      const safeEmail = email.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      existingCitizen = await Citizen.findOne({ 
+        email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } 
+      });
+    } catch (findErr: any) {
+      console.error('[AUTH] FindOne failure:', findErr);
+      return res.status(500).json({ message: 'Database lookup failed during registration', error: findErr.message });
+    }
 
     if (existingCitizen) {
       console.warn(`[AUTH] Registration rejected: Duplicate email found <${email}>`);
@@ -33,8 +39,15 @@ router.post('/register', async (req, res) => {
     }
 
     // 3. CRYPTO & PREPARATION
-    console.log('[AUTH] Hashing password and preparing entry...');
-    const hash = await bcrypt.hash(password, 8);
+    let hash;
+    try {
+      console.log('[AUTH] Hashing password...');
+      hash = await bcrypt.hash(password, 8);
+    } catch (hashErr: any) {
+      console.error('[AUTH] Bcrypt failure:', hashErr);
+      return res.status(500).json({ message: 'Security encryption failed', error: hashErr.message });
+    }
+    
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // 4. DATABASE CREATION
@@ -43,7 +56,7 @@ router.post('/register', async (req, res) => {
     try {
       citizen = await Citizen.create({
         name,
-        email: email.toLowerCase().trim(), // Normalize email storage
+        email: email.toLowerCase().trim(),
         phone,
         password_hash: hash,
         ward,
@@ -52,51 +65,33 @@ router.post('/register', async (req, res) => {
         verificationCode,
       });
     } catch (dbErr: any) {
-      // Handle MongoDB specific error codes
-      if (dbErr.code === 11000) {
-        console.error('[AUTH] DB Race condition: Duplicate email detected in catch');
-        return res.status(409).json({ message: 'An account with this email already exists.' });
-      }
-      if (dbErr.name === 'ValidationError') {
-        const firstError = Object.values(dbErr.errors)[0] as any;
-        console.error('[AUTH] DB Validation Error:', dbErr.message);
-        return res.status(400).json({ message: firstError.message || 'Invalid data provided.' });
-      }
-      throw dbErr; // Rethrow general errors to be caught in the outer block
+      if (dbErr.code === 11000) return res.status(409).json({ message: 'Email address is already registered.' });
+      console.error('[AUTH] Citizen.create failure:', dbErr);
+      return res.status(500).json({ message: 'Failed to create citizen record', error: dbErr.message });
     }
 
     // 5. EMAIL DELIVERY
-    console.log(`[AUTH] Successfully registered ${email}. Dispatching verification...`);
     let emailSent = false;
     try {
       await emailService.sendVerificationEmail(email, verificationCode);
       emailSent = true;
-      console.log(`[AUTH] OTP dispatched successfully to ${email}`);
     } catch (emailErr: any) {
-      console.error('[AUTH] Mail Dispatch FAILURE:', emailErr.message);
-      // Fallback: Continue without failing registration
+      console.error('[AUTH] Email delivery failed:', emailErr.message);
     }
 
-    // 6. FINAL RESPONSE
     const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
     
     return res.status(201).json({ 
-      message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email delivery failed. Use this code to verify: ${verificationCode}`,
+      message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email delivery failed. Code: ${verificationCode}`,
       ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode }),
-      citizen: { 
-        id: citizen._id, 
-        name: citizen.name, 
-        email: citizen.email, 
-        phone: citizen.phone, 
-        ward: citizen.ward 
-      }
+      citizen: { id: citizen._id, name: citizen.name, email: citizen.email }
     });
 
   } catch (err: any) {
-    console.error('[AUTH] CRITICAL UNHANDLED ERROR during registration:', err);
+    console.error('[AUTH] UNEXPECTED FATAL ERROR:', err);
     return res.status(500).json({ 
-      message: 'A server error occurred during registration.', 
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      message: 'A critical server error occurred.', 
+      error: err.message,
       timestamp: new Date().toISOString()
     });
   }
