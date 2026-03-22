@@ -80,9 +80,9 @@ export const emailService = {
     return { messageId: 'LOGGED', msg: 'Handshake complete or timed out' };
   },
 
-  sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string) => {
+  sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string = 'General') => {
     const transporter = createTransporter();
-    if (!transporter) { console.log(`[EMAIL] Tracking code for ${email}: ${trackingCode}`); return; }
+    if (!transporter) { console.warn(`[EMAIL] Tracking code for ${email}: ${trackingCode}`); return; }
     const mailOptions = {
       from: `"PS-CRM System" <${smtpUser}>`,
       to: email,
@@ -90,23 +90,24 @@ export const emailService = {
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
           <h2 style="color: #059669;">Complaint Successfully Submitted</h2>
-          <p>Your grievance regarding <strong>${category}</strong> has been successfully registered in our system.</p>
-          <p>You can track the progress of your complaint using the following Tracking ID:</p>
+          <p>Your grievance regarding <strong>${category}</strong> has been successfully registered.</p>
           <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; color: #059669; margin: 20px 0;">
             ${trackingCode}
           </div>
-          <p>We will notify you via email as soon as there is an update on your complaint.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">Secure, Transparent, and Citizen-Centric Governance.</p>
+          <p>You can track your case anytime with this ID.</p>
         </div>
       `,
     };
 
+    const sendPromise = (transporter as any).sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+
     try {
-      console.log(`[EMAIL] Tracking code for ${email}: ${trackingCode}`);
-      await transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Error sending tracking code email:', error);
+      console.log(`[EMAIL] Sending Tracking ID email to ${email}...`);
+      await Promise.race([sendPromise, timeoutPromise]);
+      console.log(`[EMAIL] ✅ Tracking ID email sent to ${email}`);
+    } catch (err: any) {
+      console.warn(`[EMAIL] Tracking email for ${trackingCode} timed out - proceeding anyway.`);
     }
   },
 
@@ -353,10 +354,13 @@ export const emailService = {
       `,
     };
     try {
-      console.log(`[EMAIL] Status update sent to ${email}: ${trackingCode} → ${newStatus}`);
-      await transporter.sendMail(mailOptions);
+      console.log(`[EMAIL] Sending Status Update ${newStatus} to ${email}...`);
+      const sendPromise = (transporter as any).sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+      await Promise.race([sendPromise, timeoutPromise]);
+      console.log(`[EMAIL] ✅ Status update sent to ${email}`);
     } catch (error) {
-      console.error('Error sending status update email:', error);
+      console.warn(`[EMAIL] Status update email for ${trackingCode} to ${email} timed out or failed.`);
     }
   }
 };

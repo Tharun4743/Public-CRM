@@ -70,7 +70,20 @@ export const complaintService = {
       }
     }
 
-    return newComplaint.toObject();
+    const plainComplaint = newComplaint.toObject();
+    
+    // Send Tracking Email immediately for Hackathon "WOW" factor
+    const targetEmail = plainComplaint.citizen_email || plainComplaint.contactInfo;
+    if (targetEmail && (targetEmail.includes('@'))) {
+        try {
+            const { emailService } = await import('./emailService.ts');
+            emailService.sendTrackingCodeEmail(targetEmail, complaintId, plainComplaint.category);
+        } catch (e) {
+            console.error('[COMPLAINT] Delayed email sending failed - proceeding anyway');
+        }
+    }
+
+    return plainComplaint;
   },
 
   resolve: async (id: string, proof: string, notes: string, officerId: string): Promise<any> => {
