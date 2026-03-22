@@ -9,19 +9,20 @@ const smtpUser = process.env.SMTP_USER || '';
 // Resilient SMTP Configuration for Render (Optimized for Gmail App Passwords)
 export const createTransporter = () => {
   if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
-    console.log(`[SMTP] Initializing for ${smtpUser} (Port 587, IPv4 forced)`);
+    console.log(`[SMTP] Initializing for ${smtpUser} (Port 465, IPv4 forced)`);
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // Port 587 requires secure: false for STARTTLS
+      port: 465,
+      secure: true, // Port 465 requires secure: true
       auth: { user: smtpUser, pass: smtpPass },
       // Performance & Compatibility Engine
       pool: true,
-      maxConnections: 3,
-      connectionTimeout: 8000, 
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
-      family: 4, // CRITICAL: Stop Render from using unreachable IPv6 routes
+      maxConnections: 5,
+      maxMessages: 100,
+      connectionTimeout: 10000, 
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      family: 4, // CRITICAL: Stop Render from using unreachable IPv6 routes to Atlas
       tls: {
         rejectUnauthorized: false, // Avoid SSL handshake failures on cloud servers
         minVersion: 'TLSv1.2'
