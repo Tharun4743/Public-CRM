@@ -11,23 +11,39 @@ const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'pscrm-citizen-secret';
 
 router.post('/register', async (req, res) => {
+  const { name, email, phone, password, ward, address } = req.body;
+  
+  // 1. INPUT VALIDATION & LOGGING
+  console.log(`[AUTH] Citizen Registration Attempt: <${email || 'N/A'}>`);
+  if (!name || !email || !password) {
+    console.warn('[AUTH] Registration rejected: Missing required fields');
+    return res.status(400).json({ message: 'Name, email, and password are required' });
+  }
+
   try {
-    const { name, email, phone, password, ward, address } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
-    
-    // Safely escape email for RegExp to prevent SyntaxError on invalid regex characters
-    const safeEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const exists = await Citizen.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
-    if (exists) return res.status(409).json({ message: 'Citizen already exists with this email. Please login.' });
-    
+    // 2. DUPLICATE CHECK
+    const safeEmail = email.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingCitizen = await Citizen.findOne({ 
+      email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } 
+    });
+
+    if (existingCitizen) {
+      console.warn(`[AUTH] Registration rejected: Duplicate email found <${email}>`);
+      return res.status(409).json({ message: 'An account with this email already exists. Please login.' });
+    }
+
+    // 3. CRYPTO & PREPARATION
+    console.log('[AUTH] Hashing password and preparing entry...');
     const hash = await bcrypt.hash(password, 8);
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
+    // 4. DATABASE CREATION
+    console.log('[AUTH] Creating database entry...');
     let citizen;
     try {
       citizen = await Citizen.create({
         name,
-        email,
+        email: email.toLowerCase().trim(), // Normalize email storage
         phone,
         password_hash: hash,
         ward,
@@ -36,30 +52,53 @@ router.post('/register', async (req, res) => {
         verificationCode,
       });
     } catch (dbErr: any) {
-      console.error('[DB] Registration failed:', dbErr);
-      return res.status(500).json({ message: `A database error occurred during registration: ${dbErr.message || 'Unknown error'}` });
+      // Handle MongoDB specific error codes
+      if (dbErr.code === 11000) {
+        console.error('[AUTH] DB Race condition: Duplicate email detected in catch');
+        return res.status(409).json({ message: 'An account with this email already exists.' });
+      }
+      if (dbErr.name === 'ValidationError') {
+        const firstError = Object.values(dbErr.errors)[0] as any;
+        console.error('[AUTH] DB Validation Error:', dbErr.message);
+        return res.status(400).json({ message: firstError.message || 'Invalid data provided.' });
+      }
+      throw dbErr; // Rethrow general errors to be caught in the outer block
     }
-    
-    console.log(`[OTP] Registration OTP for ${email}: ${verificationCode}`);
+
+    // 5. EMAIL DELIVERY
+    console.log(`[AUTH] Successfully registered ${email}. Dispatching verification...`);
     let emailSent = false;
     try {
       await emailService.sendVerificationEmail(email, verificationCode);
       emailSent = true;
-    } catch (err) {
-      console.error('[OTP] Email delivery failed:', err);
+      console.log(`[AUTH] OTP dispatched successfully to ${email}`);
+    } catch (emailErr: any) {
+      console.error('[AUTH] Mail Dispatch FAILURE:', emailErr.message);
+      // Fallback: Continue without failing registration
     }
 
+    // 6. FINAL RESPONSE
     const isRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER !== 'mock_user@ethereal.email');
+    
     return res.status(201).json({ 
-      message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email failed. Use this code to verify: ${verificationCode}`,
+      message: emailSent ? 'Verification code sent to your email.' : `Registration successful, but email delivery failed. Use this code to verify: ${verificationCode}`,
       ...(isRealSmtp && emailSent ? {} : { devCode: verificationCode }),
-      citizen: { id: citizen._id, name: citizen.name, email: citizen.email, phone: citizen.phone, ward: citizen.ward }
+      citizen: { 
+        id: citizen._id, 
+        name: citizen.name, 
+        email: citizen.email, 
+        phone: citizen.phone, 
+        ward: citizen.ward 
+      }
     });
-  } catch (error: any) {
-    console.error('[API] /register unhandled error:', error);
-    if (!res.headersSent) {
-      return res.status(500).json({ message: 'An unexpected error occurred during registration.' });
-    }
+
+  } catch (err: any) {
+    console.error('[AUTH] CRITICAL UNHANDLED ERROR during registration:', err);
+    return res.status(500).json({ 
+      message: 'A server error occurred during registration.', 
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

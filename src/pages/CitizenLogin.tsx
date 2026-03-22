@@ -32,6 +32,7 @@ export const CitizenLogin = () => {
     email: '',
     phone: '',
     ward: '',
+    address: '',
     password: '',
     confirmPassword: ''
   });
