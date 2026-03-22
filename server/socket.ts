@@ -1,24 +1,29 @@
 import { Server } from "socket.io";
 import http from "http";
 
-let io: Server;
+let ioInstance: Server | null = null;
 
 export const initSocket = (httpServer: http.Server) => {
-    io = new Server(httpServer, {
+    ioInstance = new Server(httpServer, {
         cors: {
             origin: "*",
             methods: ["GET", "POST"]
         }
     });
 
-    io.on("connection", (socket) => {
+    ioInstance.on("connection", (socket) => {
         socket.on("join-room", (room) => {
             socket.join(room);
             console.log(`Socket joined room: ${room}`);
         });
     });
 
-    return io;
+    return ioInstance;
 };
 
-export { io };
+export const getIO = (): Server => {
+    if (!ioInstance) {
+        throw new Error("Socket.IO not initialized! Call initSocket first.");
+    }
+    return ioInstance;
+};

@@ -1,5 +1,5 @@
 import { Notification } from '../models/System.ts';
-import { io } from "../socket.ts";
+import { getIO } from "../socket.ts";
 
 export const notificationService = {
   create: async (userId: string | null, complaintId: string | null, type: string, message: string) => {
@@ -13,17 +13,22 @@ export const notificationService = {
 
     const notificationObj = notification.toObject();
 
-    // Emit to specific users/room
-    if (userId) {
-      io.to(userId).emit("notification", notificationObj);
-    }
-    
-    if (complaintId) {
-       io.to(complaintId).emit("notification", notificationObj);
-    }
+    try {
+        const io = getIO();
+        // Emit to specific users/room
+        if (userId) {
+          io.to(userId).emit("notification", notificationObj);
+        }
+        
+        if (complaintId) {
+           io.to(complaintId).emit("notification", notificationObj);
+        }
 
-    // Admins always get notifications
-    io.to("Admin").emit("notification", notificationObj);
+        // Admins always get notifications
+        io.to("Admin").emit("notification", notificationObj);
+    } catch (err) {
+        console.warn('Socket emit skipped (likely first startup or no client):', err);
+    }
 
     return notificationObj;
   },
