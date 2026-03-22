@@ -13,15 +13,21 @@ export const createTransporter = () => {
       return null;
     }
     
-    console.log(`[SMTP] Initializing secure connection for ${smtpUser}...`);
+    console.log(`[SMTP] Attempting secure STARTTLS connection for ${smtpUser}...`);
+    // Use explicit host/port settings as 'service: gmail' can behave inconsistently in cloud networks like Render
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // Must be false for port 587
+      requireTLS: true,
       auth: { user: smtpUser, pass: smtpPass },
       logger: true, 
-      debug: false, // Set to false for cleaner production logs
+      debug: false, 
       pool: false, 
+      connectionTimeout: 10000, // 10s
+      greetingTimeout: 10000, // 10s
       tls: {
-        rejectUnauthorized: false, // Necessary for many cloud networks
+        rejectUnauthorized: false,
         minVersion: 'TLSv1.2'
       }
     } as any);
@@ -35,15 +41,6 @@ export const emailService = {
     if (!transporter) {
       console.error('[SMTP] SEND FAILURE: Transporter not initialized. Check Env Vars.');
       throw new Error('SMTP Config Missing');
-    }
-
-    try {
-      // Small verification check before sending
-      await transporter.verify();
-      console.log('[SMTP] Verification check passed.');
-    } catch (vErr: any) {
-      console.error('[SMTP] PORT 465 Connection Failed:', vErr.message);
-      throw vErr;
     }
 
     const fromAddress = smtpUser;
