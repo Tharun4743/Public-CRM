@@ -2,32 +2,33 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Clean SMTP credentials from Environment Variables — (STRIPPED OF HARDCODED DATA FOR SECURITY)
-const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
-const smtpUser = (process.env.SMTP_USER || '').trim();
-
 // Production-Grade Gmail SMTP Configuration (Strictly Environment Driven)
 export const createTransporter = () => {
-    if (!smtpUser || !smtpPass) {
-      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is not set in Render environment variables!');
+    // Read from process.env inside the function to ensure we catch any runtime updates in cloud environments
+    const currentPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    if (!currentUser || !currentPass) {
+      console.error('[SMTP] CRITICAL: SMTP_USER or SMTP_PASS is missing in Render dashboard Environment Variables.');
       return null;
     }
     
-    console.log(`[SMTP] Attempting secure STARTTLS connection for ${smtpUser}...`);
-    // Use explicit host/port settings as 'service: gmail' can behave inconsistently in cloud networks like Render
+    console.log(`[SMTP] Attempting secure STARTTLS (Port 587) for ${currentUser}...`);
+    // Standardizing on Port 587 as Port 465 is frequently blocked by cloud vendor firewalls
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, // Must be false for port 587
+      secure: false, // TLS is handled by STARTTLS (requireTLS: true)
       requireTLS: true,
-      auth: { user: smtpUser, pass: smtpPass },
+      auth: { user: currentUser, pass: currentPass },
       logger: true, 
       debug: false, 
       pool: false, 
-      connectionTimeout: 10000, // 10s
-      greetingTimeout: 10000, // 10s
+      connectionTimeout: 15000, // 15s - Increased for cloud latency
+      greetingTimeout: 15000, 
+      socketTimeout: 20000,
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: false, // Prevents certificate trust issues in cloud networks
         minVersion: 'TLSv1.2'
       }
     } as any);
@@ -35,331 +36,126 @@ export const createTransporter = () => {
 
 export const emailService = {
   sendVerificationEmail: async (email: string, code: string) => {
-    console.log(`[EMAIL] Attempting to send OTP to ${email}...`);
     const transporter = createTransporter();
-    
-    if (!transporter) {
-      console.error('[SMTP] SEND FAILURE: Transporter not initialized. Check Env Vars.');
-      throw new Error('SMTP Config Missing');
-    }
+    if (!transporter) return { success: false };
 
-    const fromAddress = smtpUser;
+    const currentUser = (process.env.SMTP_USER || '').trim();
     const mailOptions = {
-      from: `"PS-CRM System" <${fromAddress}>`,
+      from: `"PS-CRM System" <${currentUser}>`,
       to: email,
       subject: 'Email Verification - Smart Public Services CRM',
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
-          <h2 style="color: #059669;">Verify Your Identity</h2>
-          <p>Thank you for registering. Your verification code is below:</p>
-          <div style="background: #f0fdf4; padding: 20px; border-radius: 12px; text-align: center; font-size: 36px; font-weight: bold; color: #065f46; margin: 20px 0; border: 2px solid #6ee7b7;">
-            ${code}
+      html: `<div style="padding: 20px; font-family: sans-serif; background: #f8fafc; border-radius: 12px; max-width: 500px; margin: auto; border: 1px solid #e2e8f0;">
+          <h2 style="color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">Verification Required</h2>
+          <p style="color: #475569; font-size: 16px; margin-top: 20px;">Your registration is almost complete. Please enter the following 6-digit code into the application:</p>
+          <div style="background: #ffffff; padding: 25px; border-radius: 12px; text-align: center; margin: 30px 0; border: 2px dashed #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <span style="font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #1d4ed8; font-family: monospace;">${code}</span>
           </div>
-          <p>Code expires in 10 minutes.</p>
-        </div>
-      `,
+          <p style="color: #64748b; font-size: 12px; text-align: center;">This code will expire in 5 minutes for your security.</p>
+        </div>`
     };
 
-    const sendPromise = (transporter as any).sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
 
     try {
-      console.log(`[EMAIL] Attempting to send verification OTP to ${email}...`);
+      console.log(`[EMAIL] Dispatching Verification to ${email}...`);
       await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[EMAIL] ✅ Verification OTP sent to ${email}`);
+      console.log(`[EMAIL] ✅ Successfully sent verification to ${email}`);
       return { success: true };
     } catch (err: any) {
-      if (err.message === 'SMTP_TIMEOUT') {
-        console.error(`[EMAIL] ⚠️ Verification SMTP Timeout reached (10s) for ${email}`);
-      } else {
-        console.error('[EMAIL] sendVerificationEmail failed:', err);
-      }
+      console.error(`[EMAIL] ❌ Delivery Critical Error: ${err.message}`);
       return { success: false };
     }
   },
 
-  sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string = 'General') => {
+  sendTrackingCodeEmail: async (email: string, trackingCode: string, complaintId: string, category: string) => {
     const transporter = createTransporter();
-    if (!transporter) { console.warn(`[EMAIL] Tracking code for ${email}: ${trackingCode}`); return; }
+    if (!transporter) return;
+
+    const currentUser = (process.env.SMTP_USER || '').trim();
     const mailOptions = {
-      from: `"PS-CRM System" <${smtpUser}>`,
-      to: email,
-      subject: `Complaint Submitted - Tracking ID: ${trackingCode}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
-          <h2 style="color: #059669;">Complaint Successfully Submitted</h2>
-          <p>Your grievance regarding <strong>${category}</strong> has been successfully registered.</p>
-          <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; color: #059669; margin: 20px 0;">
-            ${trackingCode}
+        from: `"PS-CRM" <${currentUser}>`,
+        to: email,
+        subject: `Tracking ID: ${complaintId} - Verification Successful`,
+        html: `
+        <div style="font-family: sans-serif; padding: 25px; max-width: 600px; margin: auto; border-radius: 12px; background-color: #f8fafc; border: 1px solid #e2e8f0;">
+          <h1 style="color: #2563eb; font-size: 24px;">Complaint Logged & Verified</h1>
+          <p>Your official tracking ID has been generated and is now active in the system.</p>
+          <div style="background-color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #2563eb; margin: 20px 0;">
+             <strong>Tracking ID:</strong> <span style="font-size: 18px; color: #1e40af;">${trackingCode}</span><br>
+             <strong>Complaint Reference:</strong> ${complaintId}<br>
+             <strong>Category:</strong> ${category}
           </div>
           <p>You can track your case anytime with this ID.</p>
-        </div>
-      `,
+        </div>`,
     };
 
-    const sendPromise = (transporter as any).sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
 
     try {
-      console.log(`[EMAIL] Sending Tracking ID email to ${email}...`);
       await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[EMAIL] ✅ Tracking ID email sent to ${email}`);
-    } catch (err: any) {
-      console.warn(`[EMAIL] Tracking email for ${trackingCode} timed out - proceeding anyway.`);
+    } catch (err) {
+      console.warn(`[EMAIL] Tracking email for ${trackingCode} timed out.`);
     }
   },
 
-  sendEscalationEmail: async (email: string, trackingCode: string, level: number, reason: string) => {
+  sendForgotPasswordEmail: async (email: string, code: string, role: 'Citizen' | 'Officer' | 'Admin') => {
     const transporter = createTransporter();
-    if (!transporter) { console.warn(`[ESCALATION] Level ${level} for ${trackingCode}`); return; }
-    const levelLabel = level === 1 ? 'Department Head' : level === 2 ? 'Senior Administration' : 'Commissioner Office';
-    const alertLevel = level === 3 ? 'CRITICAL BREACH' : 'HIGH PRIORITY ESCALATION';
+    if (!transporter) return { success: false };
+
+    const currentUser = (process.env.SMTP_USER || '').trim();
     const mailOptions = {
-        from: `"PS-CRM System" <${smtpUser}>`,
-        to: email,
-        subject: `[${alertLevel}] Escalation Level ${level} - ${trackingCode}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 30px; border: 1px solid #fecaca; border-radius: 12px; max-width: 600px; margin: auto; background-color: #fffafb;">
-                <h2 style="color: #e11d48; margin-bottom: 5px;">🔥 ${alertLevel}</h2>
-                <span style="font-size: 10px; font-weight: bold; color: #9f1239; text-transform: uppercase; letter-spacing: 2px;">SLA Enforcement Engine Active</span>
-                
-                <p style="margin-top: 25px; color: #1e293b;">The following complaint has breached the mandated SLA (Service Level Agreement) and has been automatically escalated to your office.</p>
-                
-                <div style="background: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #fee2e2; margin: 25px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                    <div style="font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Tracking ID</div>
-                    <div style="font-size: 20px; font-weight: bold; color: #0f172a; margin-bottom: 15px;">${trackingCode}</div>
-                    
-                    <div style="font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Escalation Level</div>
-                    <div style="font-size: 16px; font-weight: bold; color: #e11d48;">Level ${level}: ${levelLabel}</div>
-                    
-                    <div style="font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; margin-top: 15px;">Reason for Escalation</div>
-                    <div style="font-size: 14px; color: #475569;">${reason}</div>
-                </div>
-
-                <p style="font-size: 13px; color: #64748b; line-height: 1.6;">Please take immediate action to resolve this matter within the next 2 hours to avoid further escalation to a higher authority level.</p>
-                
-                <hr style="border: none; border-top: 1px solid #fecaca; margin: 30px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Automated Regulatory Compliance Notification from PS-CRM Intelligence System</p>
-                <p style="font-size: 10px; color: #cbd5e1; text-align: center; margin-top: 5px;">Secure Transparent Smart Governance Platform</p>
-            </div>
-        `,
-    };
-
-    try {
-        console.warn(`[ESCALATION] Alert for Level ${level} sent to ${email} for ${trackingCode}`);
-        await transporter.sendMail(mailOptions);
-    } catch (error) {
-        console.error('Error sending escalation email:', error);
-    }
-  },
-
-  sendResolutionEmail: async (email: string, trackingCode: string, notes: string) => {
-    const transporter = createTransporter();
-    if (!transporter) { console.log(`[EMAIL] Resolution for ${email}: ${trackingCode}`); return; }
-    const mailOptions = {
-        from: `"PS-CRM System" <${smtpUser}>`,
-        to: email,
-        subject: `Complaint Resolved - Tracking ID: ${trackingCode}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
-                <h2 style="color: #059669;">Service Request Resolved</h2>
-                <p>We are pleased to inform you that your complaint <strong>${trackingCode}</strong> has been resolved.</p>
-                <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; border: 1px solid #bbf7d0; color: #166534; margin: 20px 0;">
-                    <strong style="display: block; margin-bottom: 5px;">Resolution Notes from Officer:</strong>
-                    ${notes}
-                </div>
-                <p><strong>Photographic Proof:</strong> A resolution proof image has been uploaded to the system. You can view it by visiting the tracking portal with your ID.</p>
-                <p>Thank you for using Smart Public Services CRM.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 12px; color: #6b7280;">Secure, Transparent, and Citizen-Centric Governance.</p>
-            </div>
-        `,
-    };
-
-    try {
-        console.log(`[EMAIL] Resolution notification sent to ${email} for ${trackingCode}`);
-        await transporter.sendMail(mailOptions);
-    } catch (error) {
-        console.error('Error sending resolution email:', error);
-    }
-  },
-
-  sendFeedbackEmail: async (email: string, trackingCode: string, token: string) => {
-    const transporter = createTransporter();
-    if (!transporter) { console.log(`[EMAIL] Feedback token for ${email}: ${token}`); return; }
-    const appUrl = process.env.APP_URL || 'https://ps-crm-995a.onrender.com';
-    const feedbackUrl = `${appUrl}/feedback?token=${token}`;
-    const mailOptions = {
-        from: `"PS-CRM System" <${smtpUser}>`,
-        to: email,
-        subject: `How did we do? - Feedback Request: ${trackingCode}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 30px; border: 2px solid #ecfdf5; border-radius: 16px; max-width: 600px; margin: auto; background-color: #ffffff;">
-                <h2 style="color: #059669; margin-bottom: 10px;">Your Opinion Matters 🌟</h2>
-                <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">Your grievance <strong>${trackingCode}</strong> was recently marked as resolved. We want to ensure you are 100% satisfied with our service.</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${feedbackUrl}" style="background-color: #059669; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.2);">Rate Our Performance</a>
-                </div>
-                <p style="font-size: 13px; color: #9ca3af; text-align: center;">This link is for one-time use and will expire once submitted.</p>
-                <hr style="border: none; border-top: 1px solid #f3f4f6; margin: 30px 0;" />
-                <p style="font-size: 12px; color: #6b7280; text-align: center;">Smart Public Services CRM - Direct Feedback Loop</p>
-            </div>
-        `,
-    };
-
-    try {
-        console.log(`[EMAIL] Feedback link for ${email}: ${feedbackUrl}`);
-        const info = await transporter.sendMail(mailOptions) as any;
-        if (info && (nodemailer as any).getTestMessageUrl) console.log(`📬 Message sent: ${info.messageId}`);
-    } catch (error) {
-        console.error('Error sending feedback email:', error);
-    }
-  },
-
-  sendApologyEmail: async (email: string, trackingCode: string) => {
-    const transporter = createTransporter();
-    if (!transporter) { console.warn(`[EMAIL] Apology for ${email}: ${trackingCode}`); return; }
-    const mailOptions = {
-        from: `"PS-CRM System" <${smtpUser}>`,
-        to: email,
-        subject: `[Re-Opened] Deepest Apologies regarding Grievance ${trackingCode}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 30px; border: 2px solid #fef2f2; border-radius: 16px; max-width: 600px; margin: auto; background-color: #fffafb;">
-                <h2 style="color: #e11d48; margin-bottom: 10px;">We're Making Things Right 🛠️</h2>
-                <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">We've received your feedback regarding <strong>${trackingCode}</strong>. We are truly sorry that our previous resolution did not meet your expectations.</p>
-                <div style="background-color: #fff1f2; padding: 20px; border-radius: 12px; border-left: 4px solid #e11d48; margin: 25px 0;">
-                    <p style="margin: 0; color: #9f1239; font-weight: bold;">Action Taken:</p>
-                    <p style="margin: 5px 0 0 0; color: #be123c;">Your case has been automatically re-opened for high-level re-examination. A senior officer will be assigned immediately.</p>
-                </div>
-                <p style="font-size: 14px; color: #475569;">Thank you for your honesty. We are committed to achieving a resolution that satisfies you.</p>
-                <hr style="border: none; border-top: 1px solid #fee2e2; margin: 30px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Regulatory Compliance & Quality Assurance Intelligence</p>
-            </div>
-        `,
-    };
-
-    try {
-        console.warn(`[EMAIL] Re-opening apology sent to ${email} for ${trackingCode}`);
-        await transporter.sendMail(mailOptions);
-    } catch (error) {
-        console.error('Error sending apology email:', error);
-    }
-  },
-
-  sendVoucherEmail: async (email: string, title: string, code: string) => {
-    const transporter = createTransporter();
-    if (!transporter) { console.log(`[EMAIL] Voucher ${code} for ${email}`); return; }
-    const mailOptions = {
-        from: `"PS-CRM Rewards" <${smtpUser}>`,
-        to: email,
-        subject: `Your Reward is Here! - ${title}`,
-        html: `
-            <div style="font-family: sans-serif; padding: 30px; border: 2px solid #fbd38d; border-radius: 20px; max-width: 600px; margin: auto; background-color: #fffaf0;">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <span style="font-size: 50px;">🎁</span>
-                    <h2 style="color: #c05621; margin-top: 10px;">Congratulations!</h2>
-                    <p style="color: #744210; font-size: 18px;">You've successfully redeemed your points for:</p>
-                    <strong style="font-size: 24px; color: #1a202c; display: block; margin: 10px 0;">${title}</strong>
-                </div>
-                
-                <div style="background: white; border: 3px dashed #cbd5e0; padding: 25px; border-radius: 12px; text-align: center; margin: 25px 0;">
-                    <span style="font-size: 12px; font-weight: bold; color: #a0aec0; text-transform: uppercase; letter-spacing: 2px;">Your Unique Voucher Code</span>
-                    <div style="font-size: 32px; font-weight: bold; color: #2d3748; margin: 10px 0; font-family: monospace; letter-spacing: 1px;">
-                        ${code}
-                    </div>
-                    <p style="font-size: 12px; color: #718096; margin-top: 10px;">Valid for 30 days from today. Redeem at any participating location.</p>
-                </div>
-
-                <p style="font-size: 14px; color: #4a5568; line-height: 1.6; text-align: center;">Thank you for being an active citizen and helping us improve public services. Every contribution makes our community better!</p>
-                
-                <hr style="border: none; border-top: 1px solid #fbd38d; margin: 30px 0;" />
-                <p style="font-size: 11px; color: #a0aec0; text-align: center;">Smart Public Services - Digital Reward Distribution System</p>
-                <p style="font-size: 10px; color: #cbd5e0; text-align: center; margin-top: 5px;">Secure Transparent Smart Governance Platform</p>
-            </div>
-        `,
-    };
-
-    try {
-        console.log(`[EMAIL] Voucher ${code} sent to ${email}`);
-        await transporter.sendMail(mailOptions);
-    } catch (error) {
-        console.error('Error sending voucher email:', error);
-    }
-  },
-
-  sendForgotPasswordEmail: async (email: string, code: string, role: 'Citizen' | 'Officer' | 'Admin' = 'Citizen') => {
-    console.log(`[OTP] Forgot-password OTP for ${email} (${role}): ${code}`);
-    const transporter = createTransporter();
-    if (!transporter) throw new Error('SMTP not configured');
-    const mailOptions = {
-      from: `"PS-CRM Security" <${smtpUser}>`,
+      from: `"PS-CRM Security" <${currentUser}>`,
       to: email,
-      subject: 'Password Reset OTP - Smart Public Services CRM',
-      html: `
-        <div style="font-family:sans-serif;padding:30px;border:2px solid #fef9c3;border-radius:16px;max-width:600px;margin:auto;background:#fffdf0;">
-          <h2 style="color:#92400e;margin-bottom:8px;">🔐 Password Reset Request</h2>
-          <p style="color:#374151;font-size:15px;">We received a request to reset your <strong>${role}</strong> account password. Use the code below:</p>
-          <div style="background:#fff7ed;border:2px solid #fed7aa;padding:24px;border-radius:12px;text-align:center;margin:24px 0;">
-            <span style="font-size:11px;font-weight:bold;color:#9a3412;text-transform:uppercase;letter-spacing:3px;">Your OTP Code</span>
-            <div style="font-size:40px;font-weight:900;color:#7c2d12;letter-spacing:12px;font-family:monospace;margin:12px 0;">${code}</div>
-            <span style="font-size:12px;color:#92400e;">Valid for 10 minutes only</span>
+      subject: 'Password Recovery - Action Required',
+      html: `<div style="padding: 20px; font-family: sans-serif; background: #fffbff; border-radius: 12px; max-width: 500px; margin: auto; border: 1px solid #fce7f3;">
+          <h2 style="color: #be185d; border-bottom: 2px solid #f472b6; padding-bottom: 10px;">Security: Reset Password</h2>
+          <p style="color: #475569; font-size: 16px; margin-top: 20px;">A password reset was requested for your ${role} account. If you did not request this, please ignore this email.</p>
+          <div style="background: #ffffff; padding: 25px; border-radius: 12px; text-align: center; margin: 30px 0; border: 2px dashed #f472b6;">
+            <span style="font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #db2777;">${code}</span>
           </div>
-          <p style="font-size:13px;color:#6b7280;">If you did not request this, please ignore this email. Your password will not change.</p>
-          <hr style="border:none;border-top:1px solid #fde68a;margin:24px 0;" />
-          <p style="font-size:11px;color:#9ca3af;text-align:center;">Smart Public Services CRM — Secure Password Recovery System</p>
-        </div>
-      `,
+          <p style="color: #94a3b8; font-size: 12px; text-align: center;">Enter this code on the reset page to set a new password. Valid for 5 minutes.</p>
+        </div>`
     };
-    const sendPromise = (transporter as any).sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
+
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
 
     try {
-      console.log(`[EMAIL] Attempting to send Forgot Password OTP to ${email}...`);
       await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[EMAIL] ✅ Reset OTP sent successfully to ${email}`);
       return { success: true };
     } catch (err: any) {
-      if (err.message === 'SMTP_TIMEOUT') {
-        console.error(`[EMAIL] ⚠️ SMTP Timeout reached (10s) for ${email}. Handshake took too long.`);
-      } else {
-        console.error('[EMAIL] Forgot-password sendMail failed:', err);
-      }
+      console.error(`[EMAIL] Recovery Email Error: ${err.message}`);
       return { success: false };
     }
   },
 
-  sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string, department?: string) => {
+  sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string, comment?: string) => {
     const transporter = createTransporter();
-    if (!transporter) { console.log(`[EMAIL] Status update for ${email}: ${trackingCode} → ${newStatus}`); return; }
-    const statusColor = newStatus === 'In Progress' ? '#2563eb' : newStatus === 'Resolved' ? '#059669' : newStatus === 'Escalated' ? '#dc2626' : '#6b7280';
-    const statusEmoji = newStatus === 'In Progress' ? '⚙️' : newStatus === 'Resolved' ? '✅' : newStatus === 'Escalated' ? '🚨' : '📋';
+    if (!transporter) return;
+
+    const currentUser = (process.env.SMTP_USER || '').trim();
     const mailOptions = {
-      from: `"PS-CRM Updates" <${smtpUser}>`,
+      from: `"PS-CRM Updates" <${currentUser}>`,
       to: email,
-      subject: `${statusEmoji} Complaint Update: ${newStatus} — ${trackingCode}`,
+      subject: `Update on your Complaint: ${trackingCode}`,
       html: `
-        <div style="font-family:sans-serif;padding:30px;border:1px solid #e5e7eb;border-radius:16px;max-width:600px;margin:auto;background:#fff;">
-          <h2 style="color:#111827;margin-bottom:8px;">${statusEmoji} Complaint Status Updated</h2>
-          <p style="color:#4b5563;font-size:15px;line-height:1.6;">Your complaint <strong style="color:#111827;">${trackingCode}</strong> has been updated to a new status:</p>
-          <div style="background:#f9fafb;border-left:4px solid ${statusColor};padding:16px 20px;border-radius:8px;margin:24px 0;">
-            <span style="font-size:11px;font-weight:bold;color:#9ca3af;text-transform:uppercase;letter-spacing:2px;">New Status</span>
-            <div style="font-size:22px;font-weight:900;color:${statusColor};margin-top:6px;">${newStatus}</div>
-            ${department ? `<div style="font-size:13px;color:#6b7280;margin-top:8px;">Assigned Department: <strong>${department}</strong></div>` : ''}
-          </div>
-          <p style="font-size:13px;color:#6b7280;">You can track your complaint progress anytime using your Tracking ID on our portal.</p>
-          <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0;" />
-          <p style="font-size:11px;color:#9ca3af;text-align:center;">Smart Public Services CRM — Citizen Notification System</p>
-        </div>
-      `,
+        <div style="font-family: sans-serif; padding: 25px; max-width: 600px; margin: auto; border-radius: 12px; background-color: #f1f5f9; border: 1px solid #cbd5e1;">
+          <h2 style="color: #334155;">Status Updated: ${newStatus}</h2>
+          <p>The status of your complaint <strong>${trackingCode}</strong> has been updated to: <span style="font-weight: bold; color: #2563eb;">${newStatus}</span></p>
+          ${comment ? `<div style="background: #ffffff; padding: 15px; border-radius: 8px; margin: 15px 0;"><strong>Official Comment:</strong><br>${comment}</div>` : ''}
+          <p style="font-size: 13px; color: #64748b;">Visit the portal to see more details.</p>
+        </div>`
     };
+
+    const sendPromise = (transporter as any).sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 15000));
+
     try {
-      console.log(`[EMAIL] Sending Status Update ${newStatus} to ${email}...`);
-      const sendPromise = (transporter as any).sendMail(mailOptions);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 10000));
       await Promise.race([sendPromise, timeoutPromise]);
-      console.log(`[EMAIL] ✅ Status update sent to ${email}`);
-    } catch (error) {
-      console.warn(`[EMAIL] Status update email for ${trackingCode} to ${email} timed out or failed.`);
+    } catch (err) {
+      console.warn(`[EMAIL] Status update email for ${trackingCode} timed out.`);
     }
   }
 };
