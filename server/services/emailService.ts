@@ -70,14 +70,15 @@ export const emailService = {
       console.log(`[EMAIL] Attempting to send verification OTP to ${email}...`);
       await Promise.race([sendPromise, timeoutPromise]);
       console.log(`[EMAIL] ✅ Verification OTP sent to ${email}`);
+      return { success: true };
     } catch (err: any) {
       if (err.message === 'SMTP_TIMEOUT') {
         console.error(`[EMAIL] ⚠️ Verification SMTP Timeout reached (10s) for ${email}`);
       } else {
         console.error('[EMAIL] sendVerificationEmail failed:', err);
       }
+      return { success: false };
     }
-    return { messageId: 'LOGGED', msg: 'Handshake complete or timed out' };
   },
 
   sendTrackingCodeEmail: async (email: string, trackingCode: string, category: string = 'General') => {
@@ -319,14 +320,15 @@ export const emailService = {
       console.log(`[EMAIL] Attempting to send Forgot Password OTP to ${email}...`);
       await Promise.race([sendPromise, timeoutPromise]);
       console.log(`[EMAIL] ✅ Reset OTP sent successfully to ${email}`);
+      return { success: true };
     } catch (err: any) {
       if (err.message === 'SMTP_TIMEOUT') {
         console.error(`[EMAIL] ⚠️ SMTP Timeout reached (10s) for ${email}. Handshake took too long.`);
       } else {
         console.error('[EMAIL] Forgot-password sendMail failed:', err);
       }
+      return { success: false };
     }
-    return { messageId: 'LOGGED', msg: 'Handshake complete or timed out' };
   },
 
   sendStatusUpdateEmail: async (email: string, trackingCode: string, newStatus: string, department?: string) => {

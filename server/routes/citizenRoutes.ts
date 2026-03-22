@@ -74,8 +74,8 @@ router.post('/register', async (req, res) => {
     // 5. EMAIL DELIVERY
     let emailSent = false;
     try {
-      await emailService.sendVerificationEmail(email, verificationCode);
-      emailSent = true;
+      const emailRes = await emailService.sendVerificationEmail(email, verificationCode);
+      emailSent = emailRes.success;
     } catch (emailErr: any) {
       console.error('[AUTH] Email delivery failed:', emailErr.message);
     }
@@ -118,8 +118,8 @@ router.post('/login', async (req, res) => {
       
       let emailResent = false;
       try {
-        await emailService.sendVerificationEmail(email, newCode);
-        emailResent = true;
+        const resendRes = await emailService.sendVerificationEmail(email, newCode);
+        emailResent = resendRes.success;
       } catch (e) {
         console.error('[LOGIN] OTP Resend failed:', e);
       }
@@ -294,14 +294,14 @@ router.post('/forgot-password', async (req, res) => {
     console.log(`[OTP] Forgot-password OTP for citizen ${email}: ${resetCode}`);
 
     let emailSent = false;
-    let devCode: string | undefined;
     try {
-      await emailService.sendForgotPasswordEmail(email, resetCode, 'Citizen');
-      emailSent = true;
+      const resetRes = await emailService.sendForgotPasswordEmail(email, resetCode, 'Citizen');
+      emailSent = resetRes.success;
     } catch (err) {
       console.error('[OTP] Forgot-password email failed:', err);
-      devCode = resetCode;
     }
+    
+    const devCode = emailSent ? undefined : resetCode;
     res.json({
       message: emailSent ? 'Password reset OTP sent to your email.' : `Email failed. Use this code: ${resetCode}`,
       ...(devCode ? { devCode } : {})
