@@ -102,6 +102,17 @@ httpServer.listen(PORT, () => {
     initDb();
     slaService.startSlaMonitoring();
     emailPollingService.start();
+
+    // Verify Email Connectivity on Startup
+    import('./server/services/emailService.ts').then(({ createTransporter }) => {
+        const transporter = createTransporter();
+        if (transporter) {
+            transporter.verify((error: any) => {
+                if (error) console.error('❌ SMTP Connection Error:', error);
+                else console.log('✅ SMTP Server is ready to send emails');
+            });
+        }
+    });
 });
 
 export { io };

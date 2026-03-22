@@ -6,24 +6,25 @@ dotenv.config();
 const smtpPass = (process.env.SMTP_PASS || '').replace(/\s/g, '');
 const smtpUser = process.env.SMTP_USER || '';
 
-// High-Performance Gmail config for Render (Uses Port 465 for speed and security)
-const createTransporter = () => {
+// Resilient SMTP Configuration for Render (Optimized for Gmail App Passwords)
+export const createTransporter = () => {
   if (smtpUser && smtpPass && smtpUser !== 'mock_user@ethereal.email') {
+    console.log(`[SMTP] Initializing for ${smtpUser} (Port 587, IPv4 forced)`);
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // Faster implicit TLS on many cloud providers
+      port: 587,
+      secure: false, // Port 587 requires secure: false for STARTTLS
       auth: { user: smtpUser, pass: smtpPass },
-      // Performance options
+      // Performance & Compatibility Engine
       pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      connectionTimeout: 3000, // Fail fast (3s) to show OTP on screen if network is slow
-      greetingTimeout: 3000,
-      socketTimeout: 5000,
-      family: 4, // Strict IPv4 to fix Render's ENETUNREACH error
+      maxConnections: 3,
+      connectionTimeout: 8000, 
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
+      family: 4, // CRITICAL: Stop Render from using unreachable IPv6 routes
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false, // Avoid SSL handshake failures on cloud servers
+        minVersion: 'TLSv1.2'
       }
     } as any);
   }
@@ -56,8 +57,8 @@ export const emailService = {
       `,
     };
     // This will THROW if SMTP fails — caller handles the fallback
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL] ✅ Verification email sent to ${email} — MessageId: ${info.messageId}`);
+    const info = await (transporter as any).sendMail(mailOptions);
+    console.log(`[EMAIL] ✅ Verification email sent to ${email} — MsgId: ${info.messageId}`);
     return info;
   },
 
@@ -191,8 +192,8 @@ export const emailService = {
 
     try {
         console.log(`[EMAIL] Feedback link for ${email}: ${feedbackUrl}`);
-        const info = await transporter.sendMail(mailOptions);
-        if (info) console.log(`📬 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        const info = await transporter.sendMail(mailOptions) as any;
+        if (info && (nodemailer as any).getTestMessageUrl) console.log(`📬 Message sent: ${info.messageId}`);
     } catch (error) {
         console.error('Error sending feedback email:', error);
     }
