@@ -54,7 +54,7 @@ export const complaintController = {
         }
       }
 
-      const complaint = await complaintService.create({
+      const complaintData = {
         ...req.body,
         contactInfo: targetEmail,
         ai_priority: req.body.ai_priority || ai.suggestedPriority,
@@ -63,7 +63,17 @@ export const complaintController = {
         estimated_resolution_days: req.body.estimated_resolution_days || ai.estimatedResolutionDays,
         ai_summary: req.body.ai_summary || ai.summary,
         ai_tags: req.body.ai_tags || ai.tags
-      });
+      };
+
+      // Fix empty string coordinates causing cast errors
+      if (complaintData.latitude === '') delete complaintData.latitude;
+      if (complaintData.longitude === '') delete complaintData.longitude;
+      
+      if (Array.isArray(complaintData.ai_tags)) {
+        complaintData.ai_tags = complaintData.ai_tags.join(', ');
+      }
+
+      const complaint = await complaintService.create(complaintData);
       
       res.status(201).json({ ...complaint, id: complaint._id });
     } catch (error) {
@@ -114,7 +124,7 @@ export const complaintController = {
       }
       const targetEmail = complaint.citizen_email || complaint.contactInfo;
       if (targetEmail && targetEmail.includes('@')) {
-        emailService.sendStatusUpdateEmail(targetEmail, complaint._id, 'In Progress', department);
+        emailService.sendStatusUpdateEmail(targetEmail, complaint._id, 'In Progress');
       }
       res.json(complaint);
     } catch (error) {

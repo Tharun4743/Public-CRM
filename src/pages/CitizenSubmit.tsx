@@ -91,10 +91,10 @@ export const CitizenSubmit = () => {
      if (formData.description.length < 10) return;
      setIsAnalyzing(true);
      try {
-        const res = await fetch('/api/complaints/analyze', {
+        const res = await fetch('/api/ai/analyze', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ description: formData.description })
+           body: JSON.stringify({ description: formData.description, category: formData.category })
         });
         const data = await res.json();
         setAiAnalysis(data);

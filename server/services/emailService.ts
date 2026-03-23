@@ -147,5 +147,116 @@ export const emailService = {
         html: getGovermentBranding(content, 'Status Change Notification')
       });
     } catch (e) {}
+  },
+
+  sendEscalationEmail: async (email: string, complaintId: string, level: number, reason: string) => {
+    const transporter = createTransporter();
+    if (!transporter) return;
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    const content = `
+      <p style="color: #475569;">Grievance <strong>${complaintId}</strong> has been escalated to Level ${level}.</p>
+      <div style="background: #fef2f2; border-left: 5px solid #ef4444; padding: 20px; border-radius: 8px; margin: 25px 0;">
+        <div style="font-size: 14px; color: #991b1b; font-weight: bold;">Reason: ${reason}</div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Smart City Alert" <${currentUser}>`,
+        to: email,
+        subject: `ESCALATION: Case ${complaintId}`,
+        html: getGovermentBranding(content, 'Automated Case Escalation')
+      });
+    } catch (e) {}
+  },
+
+  sendResolutionEmail: async (email: string, complaintId: string, notes: string) => {
+    const transporter = createTransporter();
+    if (!transporter) return;
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    const content = `
+      <p style="color: #475569;">Your grievance <strong>${complaintId}</strong> has been marked as <strong>RESOLVED</strong> by the assigned officer.</p>
+      <div style="background: #f0fdf4; border-left: 5px solid #22c55e; padding: 20px; border-radius: 8px; margin: 25px 0;">
+        <div style="font-size: 14px; color: #166534; font-weight: bold;">Resolution Notes:</div>
+        <div style="font-size: 13px; color: #14532d; margin-top: 10px;">${notes}</div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Smart City Resolution" <${currentUser}>`,
+        to: email,
+        subject: `Resolved: Case ${complaintId}`,
+        html: getGovermentBranding(content, 'Grievance Resolved')
+      });
+    } catch (e) {}
+  },
+
+  sendFeedbackEmail: async (email: string, complaintId: string, token: string) => {
+    const transporter = createTransporter();
+    if (!transporter) return;
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    const content = `
+      <p style="color: #475569;">We would like to hear about your experience regarding the resolution of case <strong>${complaintId}</strong>.</p>
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/feedback/${token}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 20px;">Provide Feedback</a>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Smart City Feedback" <${currentUser}>`,
+        to: email,
+        subject: `Feedback Request: Case ${complaintId}`,
+        html: getGovermentBranding(content, 'Citizen Feedback Portal')
+      });
+    } catch (e) {}
+  },
+
+  sendApologyEmail: async (email: string, complaintId: string) => {
+    const transporter = createTransporter();
+    if (!transporter) return;
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    const content = `
+      <p style="color: #475569;">We are deeply sincerely sorry for your negative experience regarding case <strong>${complaintId}</strong>.</p>
+      <div style="background: #fef2f2; border-left: 5px solid #ef4444; padding: 20px; border-radius: 8px; margin: 25px 0;">
+        <div style="font-size: 14px; color: #991b1b; font-weight: bold;">Action Taken:</div>
+        <div style="font-size: 13px; color: #7f1d1d; margin-top: 10px;">Your complaint has been forcefully reopened and assigned to a higher authority for immediate review.</div>
+      </div>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Smart City Executive" <${currentUser}>`,
+        to: email,
+        subject: `Apology: Case Reopened ${complaintId}`,
+        html: getGovermentBranding(content, 'Service Failure Escalation')
+      });
+    } catch (e) {}
+  },
+
+  sendVoucherEmail: async (email: string, title: string, code: string) => {
+    const transporter = createTransporter();
+    if (!transporter) return;
+    const currentUser = (process.env.SMTP_USER || '').trim();
+
+    const content = `
+      <p style="color: #475569;">Congratulations on redeeming your merit points for: <strong>${title}</strong></p>
+      <div style="background: #fdf2f8; border: 2px dashed #db2777; border-radius: 12px; padding: 30px; text-align: center; margin: 30px 0;">
+        <span style="font-size: 32px; font-weight: 800; color: #db2777; letter-spacing: 5px;">${code}</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Present this secure voucher code to the affiliated partner to complete your redemption.</p>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"Smart City Rewards" <${currentUser}>`,
+        to: email,
+        subject: `Your Reward Voucher: ${title}`,
+        html: getGovermentBranding(content, 'Merit Reward Redemption')
+      });
+    } catch (e) {}
   }
 };
