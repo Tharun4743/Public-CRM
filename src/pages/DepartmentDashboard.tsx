@@ -5,7 +5,9 @@ import { Complaint, ComplaintStatus } from '../types';
 
 export const DepartmentDashboard = () => {
   const [complaints, setComplaints] = React.useState<Complaint[]>([]);
-  const [selectedDept, setSelectedDept] = React.useState('Sanitation');
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const [selectedDept, setSelectedDept] = React.useState(user?.department || 'Sanitation');
   const [isLoading, setIsLoading] = React.useState(true);
   const [resolutionData, setResolutionData] = React.useState<Record<string, any>>({});
   const [loadingAi, setLoadingAi] = React.useState<Record<string, boolean>>({});

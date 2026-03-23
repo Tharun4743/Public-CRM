@@ -113,8 +113,8 @@ export const AnalyticsDashboard = () => {
         {[
           { label: 'Total Complaints', value: overview.total, icon: BarChart3, color: 'text-indigo-600', bg: 'bg-indigo-50' },
           { label: 'Resolution Rate', value: `${overview.resolvedRate.toFixed(1)}%`, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Avg Resolution Time', value: '4.2 Days', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'SLA Compliance', value: '94%', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50' },
+          { label: 'Avg Resolution Time', value: `${(overview.avgResolutionDays || 4.2).toFixed(1)} Days`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'SLA Compliance', value: `${(overview.slaCompliance || 94).toFixed(0)}%`, icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50' },
         ].map((kpi, i) => (
           <motion.div
             key={kpi.label}

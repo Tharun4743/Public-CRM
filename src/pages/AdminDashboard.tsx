@@ -28,7 +28,7 @@ export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = React.useState<'Overview' | 'Audit' | 'Rewards' | 'Approvals' | 'Database'>('Overview');
   const [pendingOfficers, setPendingOfficers] = React.useState<any[]>([]);
   const [dbStats, setDbStats] = React.useState<any>(null);
-  const [dbStatsKey, setDbStatsKey] = React.useState('pscrm-admin-2024');
+  const [dbStatsKey, setDbStatsKey] = React.useState('');
   const [isLoadingDb, setIsLoadingDb] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = React.useState(false);
