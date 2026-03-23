@@ -124,8 +124,9 @@ export const userController = {
       }
 
       const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = (user as any).toObject ? (user as any).toObject() : user;
-      res.status(200).json({ ...userWithoutSensitiveData, token });
+      const userObj = user.toObject();
+      const { password: _, verificationCode: __, ...userWithoutSensitiveData } = userObj;
+      res.status(200).json({ ...userWithoutSensitiveData, id: user._id, token });
     } catch (error) {
       res.status(500).json({ message: "Login failed." });
     }
@@ -141,10 +142,20 @@ export const userController = {
     }
   },
 
+  declineOfficer: async (req: Request, res: Response) => {
+    try {
+      const { officerId } = req.body;
+      await User.findByIdAndDelete(officerId);
+      res.json({ message: "Officer declined and removed" });
+    } catch (error) {
+      res.status(500).json({ message: "Decline failed." });
+    }
+  },
+
   getPendingOfficers: async (req: Request, res: Response) => {
     try {
       const officers = await User.find({ role: 'Officer', isApproved: false }).lean();
-      res.json(officers);
+      res.json(officers.map(o => ({ ...o, id: o._id })));
     } catch (error) {
       res.status(500).json({ message: "Error." });
     }

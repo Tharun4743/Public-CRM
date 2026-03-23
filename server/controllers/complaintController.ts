@@ -18,11 +18,11 @@ export const complaintController = {
       });
 
       // Robust Validation
-      if (!description || !category || (!citizen_email && !contactInfo) || !citizenName) {
+      if (!description || !category || (!citizen_email && !contactInfo) || !citizenName || !req.body.address || !req.body.complaint_image) {
         console.error("[COMPLAINT] Validation failed: Missing required fields");
         return res.status(400).json({ 
-          message: "Missing required fields: name, email, category or description.",
-          received: { description: !!description, category: !!category, email: !!(citizen_email || contactInfo), name: !!citizenName }
+          message: "Missing required fields: name, email, category, description, photo evidence, or location.",
+          received: { description: !!description, category: !!category, email: !!(citizen_email || contactInfo), name: !!citizenName, address: !!req.body.address, image: !!req.body.complaint_image }
         });
       }
 
@@ -33,12 +33,12 @@ export const complaintController = {
       }).sort({ createdAt: -1 }).limit(25).lean();
       
       const past = lastComplaints.map(c => c.category);
-      let ai;
+      let ai: any;
       try {
         ai = await aiService.analyzeComplaint(description, category, past);
       } catch (aiErr) {
         console.warn("[COMPLAINT] AI Analysis failed, using fallback:", aiErr);
-        ai = { suggestedPriority: 'Medium', sentimentScore: 50, urgencyLevel: 'Medium', estimatedResolutionDays: 7, summary: description.slice(0, 100), tags: [category] };
+        ai = { suggestedPriority: 'Medium', sentimentScore: 50, urgencyLevel: 'Medium', estimatedResolutionDays: 7, summary: description.slice(0, 100), tags: [category], recommendedDepartment: category };
       }
 
       if (!forceSubmit) {
@@ -56,6 +56,7 @@ export const complaintController = {
 
       const complaintData = {
         ...req.body,
+        department: ai.recommendedDepartment || category,
         contactInfo: targetEmail,
         ai_priority: req.body.ai_priority || ai.suggestedPriority,
         sentiment_score: req.body.sentiment_score || ai.sentimentScore,
@@ -70,7 +71,7 @@ export const complaintController = {
       if (complaintData.longitude === '') delete complaintData.longitude;
       
       if (Array.isArray(complaintData.ai_tags)) {
-        complaintData.ai_tags = complaintData.ai_tags.join(', ');
+        complaintData.ai_tags = JSON.stringify(complaintData.ai_tags);
       }
 
       const complaint = await complaintService.create(complaintData);
@@ -100,7 +101,7 @@ export const complaintController = {
       if (!complaint) {
         return res.status(404).json({ message: "Complaint not found" });
       }
-      res.json(complaint);
+      res.json({ ...complaint, id: complaint._id });
     } catch (error) {
       res.status(500).json({ message: "Error fetching complaint" });
     }
@@ -109,7 +110,8 @@ export const complaintController = {
   getAllComplaints: async (req: Request, res: Response) => {
     try {
       const complaints = await complaintService.getAll();
-      res.json(complaints);
+      const mapped = complaints.map(c => ({ ...c, id: c._id }));
+      res.json(mapped);
     } catch (error) {
       res.status(500).json({ message: "Error fetching complaints" });
     }
@@ -126,7 +128,7 @@ export const complaintController = {
       if (targetEmail && targetEmail.includes('@')) {
         emailService.sendStatusUpdateEmail(targetEmail, complaint._id, 'In Progress');
       }
-      res.json(complaint);
+      res.json({ ...complaint, id: complaint._id });
     } catch (error) {
       res.status(500).json({ message: "Error assigning complaint" });
     }
@@ -143,7 +145,7 @@ export const complaintController = {
       if (targetEmail && targetEmail.includes('@') && ['In Progress', 'Escalated', 'Closed'].includes(status)) {
         emailService.sendStatusUpdateEmail(targetEmail, complaint._id, status);
       }
-      res.json(complaint);
+      res.json({ ...complaint, id: complaint._id });
     } catch (error) {
       res.status(500).json({ message: "Error updating status" });
     }
@@ -184,6 +186,7 @@ export const complaintController = {
       const { q, category, priority, status, department, dateFrom, dateTo, slaStatus, minSentiment, maxSentiment, page } = req.query;
       const filters = { q, category, priority, status, department, dateFrom, dateTo, slaStatus, minSentiment, maxSentiment };
       const result = await complaintService.search(filters, Number(page) || 1);
+      result.complaints = result.complaints.map((c: any) => ({ ...c, id: c._id }));
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Error during smart search" });

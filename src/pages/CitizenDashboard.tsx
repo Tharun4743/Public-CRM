@@ -151,7 +151,7 @@ export const CitizenDashboard = () => {
                            >
                              <td className="px-6 py-5">
                                <div className="font-mono text-sm font-black text-zinc-900 leading-none">#{c._id}</div>
-                               <div className="text-[9px] font-bold text-zinc-400 mt-1 uppercase">Filed on {new Date(c.created_at).toLocaleDateString()}</div>
+                               <div className="text-[9px] font-bold text-zinc-400 mt-1 uppercase">Filed on {new Date(c.createdAt).toLocaleDateString()}</div>
                              </td>
                              <td className="px-6 py-5">
                                <div className="text-sm font-bold text-zinc-900 uppercase italic">{c.category}</div>

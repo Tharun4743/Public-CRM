@@ -30,7 +30,7 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
   let oldValue: any = null;
   if (complaintId && (req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE')) {
     try {
-      oldValue = await Complaint.findById(complaintId).lean();
+      oldValue = await Complaint.findOne({ _id: complaintId }).lean();
     } catch (err) {
       console.error('Audit Logger: Error fetching old value', err);
     }
@@ -48,7 +48,7 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
         let newValue: any = null;
         if (complaintId && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
           try {
-             newValue = await Complaint.findById(complaintId).lean();
+             newValue = await Complaint.findOne({ _id: complaintId }).lean();
           } catch (err) {}
         } else if (!complaintId && req.method === 'POST') {
            // Maybe the ID is in the response body?
@@ -56,7 +56,7 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
              const parsedBody = JSON.parse(body);
              const bodyId = parsedBody._id || parsedBody.id;
              if (bodyId) {
-               newValue = await Complaint.findById(bodyId).lean();
+               newValue = await Complaint.findOne({ _id: bodyId }).lean();
                complaintId = bodyId;
              }
            } catch (err) {}
@@ -65,13 +65,16 @@ export const auditLogger = async (req: Request, res: Response, next: NextFunctio
         const action = `${req.method} ${req.path}`;
         
         try {
+          // Find any valid ID (CMP- or ObjectId)
+          const finalId = complaintId || (newValue ? newValue._id : null);
+
           await AuditLog.create({
             user_id: userId,
             user_role: userRole,
             action,
-            complaint_id: (complaintId && complaintId.length === 24) ? complaintId : undefined, // only if valid ObjectId string or mixed
-            old_value: JSON.stringify(oldValue),
-            new_value: JSON.stringify(newValue),
+            complaint_id: finalId, 
+            old_value: oldValue ? JSON.stringify(oldValue) : undefined,
+            new_value: newValue ? JSON.stringify(newValue) : undefined,
             ip_address: ipAddress
           });
         } catch (err) {

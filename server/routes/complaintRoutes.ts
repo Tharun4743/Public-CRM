@@ -1,25 +1,26 @@
 import { Router } from "express";
 import { complaintController } from "../controllers/complaintController.ts";
+import { requireAdminAuth, requireOfficerAuth } from "../middleware/auth.ts";
 
 const router = Router();
 
 // Citizen Routes
 router.post("/", complaintController.submitComplaint);
-router.post("/bulk", complaintController.bulkUpdate);
-router.patch("/bulk", complaintController.bulkUpdate);
+router.post("/bulk", requireAdminAuth, complaintController.bulkUpdate);
+router.patch("/bulk", requireAdminAuth, complaintController.bulkUpdate);
 router.get("/geodata", complaintController.getGeoData);
-router.post("/collaborate", complaintController.addCollaborators);
+router.post("/collaborate", requireOfficerAuth, complaintController.addCollaborators);
 
 // Admin / Officer Routes
-router.get("/search", complaintController.searchComplaints);
-router.get("/export", complaintController.exportComplaints);
-router.get("/", complaintController.getAllComplaints);
-router.get("/breach-status", complaintController.getBreachStatus);
-router.get("/sla-stats", complaintController.getSlaStats);
+router.get("/search", requireOfficerAuth, complaintController.searchComplaints);
+router.get("/export", requireAdminAuth, complaintController.exportComplaints);
+router.get("/", requireOfficerAuth, complaintController.getAllComplaints);
+router.get("/breach-status", requireAdminAuth, complaintController.getBreachStatus);
+router.get("/sla-stats", requireAdminAuth, complaintController.getSlaStats);
 router.get("/:id", complaintController.getComplaintById);
 router.post("/:id/vote", complaintController.voteComplaint);
-router.post("/:id/resolve", complaintController.resolveComplaint);
-router.put("/:id/assign", complaintController.assignComplaint);
-router.put("/:id/status", complaintController.updateComplaintStatus);
+router.post("/:id/resolve", requireOfficerAuth, complaintController.resolveComplaint);
+router.put("/:id/assign", requireAdminAuth, complaintController.assignComplaint);
+router.put("/:id/status", requireOfficerAuth, complaintController.updateComplaintStatus);
 
 export default router;

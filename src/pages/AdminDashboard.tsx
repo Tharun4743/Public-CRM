@@ -97,6 +97,19 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleDeclineOfficer = async (id: string) => {
+    try {
+      await fetch('/api/users/decline-officer', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ officerId: id })
+      });
+      fetchPendingOfficers();
+    } catch (err) {
+      console.error('Error declining officer:', err);
+    }
+  };
+
   const fetchDbStats = async (key?: string) => {
     setIsLoadingDb(true);
     setDbError(null);
@@ -281,7 +294,11 @@ export const AdminDashboard = () => {
   }, []);
 
   const handleExport = async () => {
-    const queryParams = new URLSearchParams(filters);
+    // Convert all filter values to strings to satisfy URLSearchParams
+    const stringifiedFilters = Object.fromEntries(
+      Object.entries(filters).map(([key, val]) => [key, String(val)])
+    );
+    const queryParams = new URLSearchParams(stringifiedFilters);
     window.open(`/api/complaints/export?${queryParams}`, '_blank');
   };
 
@@ -753,7 +770,21 @@ export const AdminDashboard = () => {
                               <option value={ComplaintStatus.RESOLVED}>Resolved</option>
                             </select>
                           </td>
-                          <td className="px-6 py-4 text-sm font-bold text-zinc-600">{c.department}</td>
+                          <td className="px-6 py-4 text-sm font-bold text-zinc-600">
+                            <select
+                              value={c.department || ""}
+                              onChange={(e) => handleAssign(c._id || c.id, e.target.value)}
+                              className="text-[10px] font-black rounded-lg border-2 border-transparent focus:border-emerald-500 py-1 pl-2 pr-6 cursor-pointer bg-zinc-100"
+                            >
+                              <option value="" disabled>Unassigned</option>
+                              <option value="Sanitation">Sanitation</option>
+                              <option value="Water Supply">Water Supply</option>
+                              <option value="Electricity">Electricity</option>
+                              <option value="Roads & Transport">Roads & Transport</option>
+                              <option value="Public Safety">Public Safety</option>
+                              <option value="General">General</option>
+                            </select>
+                          </td>
                           <td className="px-6 py-4 text-right">
                              <button onClick={() => setSelectedComplaint(c)} className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all">
                                 <Sparkles size={18} />
@@ -1070,12 +1101,20 @@ export const AdminDashboard = () => {
                                </span>
                             </td>
                             <td className="py-4 px-6 text-right">
-                              <button 
-                                onClick={() => handleApproveOfficer(officer._id || officer.id)}
-                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 ml-auto"
-                              >
-                                <Check size={16} /> Approve
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button 
+                                  onClick={() => handleDeclineOfficer(officer._id || officer.id)}
+                                  className="px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-rose-100 transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                  <X size={16} /> Decline
+                                </button>
+                                <button 
+                                  onClick={() => handleApproveOfficer(officer._id || officer.id)}
+                                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                  <Check size={16} /> Approve
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

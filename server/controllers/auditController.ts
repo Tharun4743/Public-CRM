@@ -13,6 +13,7 @@ export const auditController = {
       };
       
       const result = await auditService.getLogs(filters, Number(page) || 1);
+      result.logs = result.logs.map((L: any) => ({ ...L, id: L._id }));
       res.json(result);
     } catch (error) {
       console.error('Error fetching audit logs:', error);

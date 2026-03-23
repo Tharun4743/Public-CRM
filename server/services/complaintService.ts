@@ -212,7 +212,16 @@ export const complaintService = {
 
     const header = "ID,Category,Priority,Status,Department,SLA Status,Sentiment,Created At";
     const rows = complaints.map((r: any) => 
-        [r._id, r.category, r.priority, r.status, r.department, r.sla_status, r.sentiment_score, r.createdAt]
+        [
+          r._id, 
+          r.category, 
+          r.priority, 
+          r.status, 
+          r.department, 
+          r.sla_status, 
+          r.sentiment_score, 
+          r.createdAt ? new Date(r.createdAt).toISOString() : ''
+        ]
         .map(v => `"${v ?? ''}"`).join(",")
     ).join("\n");
 

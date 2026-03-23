@@ -155,6 +155,12 @@ export const CitizenSubmit = () => {
 
   const handleSubmit = async (e?: React.FormEvent, forceSubmit = false) => {
     e?.preventDefault();
+
+    if (!formData.address || !formData.complaint_image) {
+      alert("⚠️ Mandatory Requirements Missing: You must provide a Photo Evidence and GPS Location to deploy this report.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -439,7 +445,7 @@ export const CitizenSubmit = () => {
                           </div>
                           <div className="text-center">
                             <div className="text-[10px] font-black text-zinc-900 uppercase tracking-widest leading-none">Evidence Capture</div>
-                            <p className="text-[8px] font-bold text-zinc-400 mt-1.5 uppercase tracking-widest">MAX 5MB OPTIONAL DATA</p>
+                            <p className="text-[8px] font-bold text-zinc-400 mt-1.5 uppercase tracking-widest">MAX 5MB REQUIRED DATA</p>
                           </div>
                         </div>
                       ) : (

@@ -1,6 +1,6 @@
 import express from 'express';
 import { rewardsController } from '../controllers/rewardsController.ts';
-import { requireCitizenAuth } from '../middleware/auth.ts';
+import { requireCitizenAuth, requireAdminAuth } from '../middleware/auth.ts';
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/vouchers/my', requireCitizenAuth, rewardsController.getMyVouchers);
 router.get('/leaderboard', rewardsController.getLeaderboard);
 
 // Admin
-router.post('/vouchers/types', requireCitizenAuth, rewardsController.createVoucherType);
-router.get('/vouchers/redeemed', requireCitizenAuth, rewardsController.getAllRedeemedVouchers);
+router.post('/vouchers/types', requireAdminAuth, rewardsController.createVoucherType);
+router.get('/vouchers/redeemed', requireAdminAuth, rewardsController.getAllRedeemedVouchers);
 
 export default router;
