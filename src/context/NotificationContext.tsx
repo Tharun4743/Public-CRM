@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import { User } from '../types';
+import { getPortalAuthHeaders, getPortalUser } from '../utils/portalAuth';
 
 interface Notification {
   id: string;
@@ -24,13 +25,12 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  const userStr = localStorage.getItem('user');
-  const user: User | null = userStr ? JSON.parse(userStr) : null;
+  const user: User | null = getPortalUser();
 
   useEffect(() => {
     if (!user) return;
 
-    const socket = io();
+    const socket = io({ auth: { token: (user as any)?.token } });
 
     socket.on('connect', () => {
       socket.emit('join-room', user.id);
@@ -53,7 +53,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const fetchNotifications = async () => {
     if (!user || !user.id) return;
     try {
-      const res = await fetch(`/api/notifications?userId=${user.id}`);
+      const res = await fetch(`/api/notifications`, { headers: getPortalAuthHeaders() });
       if (!res.ok) {
         console.error('Failed to fetch notifications:', res.status);
         return;
@@ -69,7 +69,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const markAsRead = async (id: string) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH', headers: getPortalAuthHeaders() });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
     } catch (err) {}
   };
@@ -77,16 +77,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAllRead = async () => {
     if (!user) return;
     try {
-      await fetch(`/api/notifications/read-all`, { 
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
-      });
+      await fetch(`/api/notifications/read-all`, { method: 'PATCH', headers: getPortalAuthHeaders() });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
     } catch (err) {}
   };
 
-  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => n.is_read === 0).length : 0;
+  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => n.is_read === 0 || (n as any).is_read === false).length : 0;
 
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllRead }}>

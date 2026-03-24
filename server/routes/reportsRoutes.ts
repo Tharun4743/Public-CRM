@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Complaint } from '../models/Complaint.ts';
 import { ReportConfig, ScheduledReport } from '../models/Reporting.ts';
+import { requireAdminAuth } from '../middleware/auth.ts';
 
 const router = Router();
 
@@ -9,12 +10,13 @@ const DIMENSION_MAP: Record<string, any> = {
   Category: '$category',
   Priority: '$priority',
   Status: '$status',
-  Ward: '$ward', // This might need a lookup if not in complaint, but I added it to Complaint model
+  // Complaint documents do not have a dedicated ward field.
+  Ward: '$address',
   Source: '$source',
   Month: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }
 };
 
-router.post('/generate', async (req, res) => {
+router.post('/generate', requireAdminAuth, async (req, res) => {
   try {
     const { dimensions = [], metrics = ['Count'], dateFrom, dateTo } = req.body;
     
@@ -99,7 +101,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-router.post('/config', async (req, res) => {
+router.post('/config', requireAdminAuth, async (req, res) => {
   try {
     const { name, dimensions, metrics, createdBy } = req.body;
     const config = await ReportConfig.create({
@@ -114,7 +116,7 @@ router.post('/config', async (req, res) => {
   }
 });
 
-router.get('/config', async (_req, res) => {
+router.get('/config', requireAdminAuth, async (_req, res) => {
   try {
     const rows = await ReportConfig.find().sort({ created_at: -1 }).lean();
     res.json(rows);
@@ -123,7 +125,7 @@ router.get('/config', async (_req, res) => {
   }
 });
 
-router.post('/schedule', async (req, res) => {
+router.post('/schedule', requireAdminAuth, async (req, res) => {
   try {
     const { configId, frequency, recipients } = req.body;
     await ScheduledReport.create({
@@ -138,7 +140,7 @@ router.post('/schedule', async (req, res) => {
   }
 });
 
-router.get('/schedule', async (_req, res) => {
+router.get('/schedule', requireAdminAuth, async (_req, res) => {
   try {
     const rows = await ScheduledReport.find().sort({ _id: -1 }).lean();
     res.json(rows);

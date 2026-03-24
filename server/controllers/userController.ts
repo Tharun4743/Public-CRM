@@ -6,7 +6,7 @@ import { User } from "../models/User.ts";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export const userController = {
   register: async (req: Request, res: Response) => {
@@ -23,7 +23,8 @@ export const userController = {
         return res.status(409).json({ message: "An account with this email already exists." });
       }
 
-      if (role === UserRole.ADMIN && password !== "@Nammatha") {
+      const adminRegistrationSecret = process.env.ADMIN_REGISTRATION_SECRET;
+      if (role === UserRole.ADMIN && adminRegistrationSecret && req.body.adminSecret !== adminRegistrationSecret) {
         return res.status(403).json({ message: "Invalid Admin authorization password" });
       }
 
@@ -123,6 +124,7 @@ export const userController = {
         return res.status(403).json({ message: "Pending Admin approval." });
       }
 
+      if (!JWT_SECRET) return res.status(500).json({ message: "Server authentication is not configured." });
       const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
       const userObj = user.toObject();
       const { password: _, verificationCode: __, ...userWithoutSensitiveData } = userObj;

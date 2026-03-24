@@ -92,6 +92,7 @@ const ComplaintVoteSchema = new Schema<IComplaintVote>({
     complaint_id: { type: String, ref: 'Complaint', required: true },
     citizen_email: { type: String, required: true },
 }, { timestamps: { createdAt: 'voted_at', updatedAt: false } });
+ComplaintVoteSchema.index({ complaint_id: 1, citizen_email: 1 }, { unique: true });
 
 export const ComplaintVote = mongoose.model<IComplaintVote>('ComplaintVote', ComplaintVoteSchema);
 

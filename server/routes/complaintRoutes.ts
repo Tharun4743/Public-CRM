@@ -15,7 +15,7 @@ router.post("/collaborate", requireOfficerAuth, complaintController.addCollabora
 router.get("/search", requireOfficerAuth, complaintController.searchComplaints);
 router.get("/export", requireAdminAuth, complaintController.exportComplaints);
 router.get("/", requireOfficerAuth, complaintController.getAllComplaints);
-router.get("/breach-status", requireAdminAuth, complaintController.getBreachStatus);
+router.get("/breach-status", requireOfficerAuth, complaintController.getBreachStatus);
 router.get("/sla-stats", requireAdminAuth, complaintController.getSlaStats);
 router.get("/:id", complaintController.getComplaintById);
 router.post("/:id/vote", complaintController.voteComplaint);

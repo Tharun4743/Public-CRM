@@ -91,15 +91,23 @@ export const CitizenSubmit = () => {
      if (formData.description.length < 10) return;
      setIsAnalyzing(true);
      try {
+        const token = getCitizenToken();
         const res = await fetch('/api/ai/analyze', {
            method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
+           headers: {
+             'Content-Type': 'application/json',
+             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+           },
            body: JSON.stringify({ description: formData.description, category: formData.category })
         });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || 'AI request failed');
+        }
         const data = await res.json();
         setAiAnalysis(data);
-     } catch (e) {
-        alert("AI node unreachable");
+     } catch (e: any) {
+        alert(e?.message || "AI node unreachable");
      } finally {
         setIsAnalyzing(false);
      }
@@ -109,7 +117,7 @@ export const CitizenSubmit = () => {
      if (!aiAnalysis) return;
      setFormData(prev => ({
         ...prev,
-        category: aiAnalysis.suggestedCategory || prev.category,
+        category: aiAnalysis.recommendedDepartment || prev.category,
         priority: aiAnalysis.suggestedPriority || prev.priority
      }));
   };
@@ -156,7 +164,7 @@ export const CitizenSubmit = () => {
   const handleSubmit = async (e?: React.FormEvent, forceSubmit = false) => {
     e?.preventDefault();
 
-    if (!formData.address || !formData.complaint_image) {
+    if (!formData.address || !formData.latitude || !formData.longitude || !formData.complaint_image) {
       alert("⚠️ Mandatory Requirements Missing: You must provide a Photo Evidence and GPS Location to deploy this report.");
       return;
     }
@@ -218,7 +226,7 @@ export const CitizenSubmit = () => {
               <div className="text-5xl font-mono font-black text-emerald-600 tracking-tighter select-all">{submittedId}</div>
               <div className="mt-6 flex items-center justify-center gap-2 text-emerald-600 font-bold text-sm bg-white py-2 rounded-xl">
                 <Star size={16} fill="currentColor" />
-                <span>+25 Points Awarded to your profile</span>
+                <span>+20 Points Awarded to your profile</span>
               </div>
             </div>
 
@@ -388,7 +396,7 @@ export const CitizenSubmit = () => {
                          <div className="flex gap-4">
                             <div>
                                <div className="text-[8px] font-black uppercase text-zinc-400 mb-1">Suggested Mode</div>
-                               <div className="text-[10px] font-black text-emerald-600 uppercase italic">Cat: {aiAnalysis.suggestedCategory || formData.category}</div>
+                               <div className="text-[10px] font-black text-emerald-600 uppercase italic">Cat: {aiAnalysis.recommendedDepartment || formData.category}</div>
                             </div>
                             <div className="w-px h-8 bg-zinc-100" />
                             <div>

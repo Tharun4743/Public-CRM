@@ -77,7 +77,7 @@ export const complaintService = {
     if (targetEmail && (targetEmail.includes('@'))) {
         try {
             const { emailService } = await import('./emailService.ts');
-            emailService.sendTrackingCodeEmail(targetEmail, complaintId, plainComplaint.category);
+            emailService.sendTrackingCodeEmail(targetEmail, complaintId, complaintId);
         } catch (e) {
             console.error('[COMPLAINT] Delayed email sending failed - proceeding anyway');
         }

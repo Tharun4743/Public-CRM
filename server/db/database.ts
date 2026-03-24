@@ -5,11 +5,12 @@ import { SLARule } from '../models/Reporting.ts';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pscrm:TEAMGOAT@ps-crm.mxwibid.mongodb.net/?appName=ps-crm';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 export const connectDb = async () => {
-    // Use fallback MongoDB URI if not set
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://pscrm:TEAMGOAT@ps-crm.mxwibid.mongodb.net/?appName=ps-crm';
+    if (!MONGODB_URI) {
+        throw new Error('MONGODB_URI is required');
+    }
     
     let retries = 3;
     while (retries > 0) {
@@ -42,21 +43,23 @@ export const connectDb = async () => {
 
 const initSeedData = async () => {
     try {
-        // Seed default admin
+        // Seed default admin only when explicit env credentials are provided
         const adminCount = await User.countDocuments({ role: 'Admin' });
-        if (adminCount === 0) {
+        const seedAdminEmail = process.env.SEED_ADMIN_EMAIL;
+        const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+        if (adminCount === 0 && seedAdminEmail && seedAdminPassword) {
             console.log('Creating default admin user...');
             const bcrypt = await import("bcryptjs");
-            const hashedPassword = await bcrypt.hash('admin123', 10);
+            const hashedPassword = await bcrypt.hash(seedAdminPassword, 10);
             await User.create({
                 name: 'System Admin',
-                email: 'admin@ps-crm.gov',
+                email: seedAdminEmail,
                 password: hashedPassword,
                 role: 'Admin',
                 isVerified: true,
                 isApproved: true
             });
-            console.log('Default admin user created: admin@ps-crm.gov / admin123');
+            console.log('Default admin user created from seed environment variables');
         }
 
         // Seed default SLA rules

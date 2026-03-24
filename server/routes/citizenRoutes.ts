@@ -8,7 +8,7 @@ import { complaintService } from '../services/complaintService.ts';
 import { emailService } from '../services/emailService.ts';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'ps-crm-secret-shared-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 router.post('/register', async (req, res) => {
     try {
@@ -80,6 +80,7 @@ router.post('/login', async (req, res) => {
             });
         }
         
+        if (!JWT_SECRET) return res.status(500).json({ message: 'Server authentication is not configured' });
         const token = jwt.sign({ id: citizen._id, email: citizen.email, role: 'Citizen' }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, citizen: { id: citizen._id, name: citizen.name, email: citizen.email } });
     } catch (error) {
@@ -102,6 +103,7 @@ router.post('/verify-email', async (req, res) => {
             citizen.verificationExpiry = undefined;
             await citizen.save();
             
+            if (!JWT_SECRET) return res.status(500).json({ message: 'Server authentication is not configured' });
             const token = jwt.sign({ id: citizen._id, email: citizen.email, role: 'Citizen' }, JWT_SECRET, { expiresIn: '7d' });
             res.json({ token, message: 'Verified.', citizen: { id: citizen._id, name: citizen.name, email: citizen.email } });
         } else {

@@ -12,18 +12,15 @@ export const feedbackService = {
   },
 
   submitFeedback: async (token: string, rating: number, comment: string) => {
-    const feedback = await Feedback.findOne({ token, token_used: false });
+    const now = new Date();
+    const feedback = await Feedback.findOneAndUpdate(
+      { token, token_used: false },
+      { $set: { token_used: true, rating, comment, submitted_at: now } },
+      { new: true }
+    );
     if (!feedback) throw new Error('Invalid or expired token');
 
     const complaintId = feedback.complaint_id;
-    const now = new Date();
-
-    // 1. Mark token as used and save feedback
-    feedback.token_used = true;
-    feedback.rating = rating;
-    feedback.comment = comment;
-    feedback.submitted_at = now as any;
-    await feedback.save();
 
     const complaint = await Complaint.findByIdAndUpdate(complaintId, {
       satisfaction_score: rating,

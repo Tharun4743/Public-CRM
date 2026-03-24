@@ -53,7 +53,14 @@ export default function App() {
               />
 
               <Route path="/leaderboard" element={<LeaderboardPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
+              <Route
+                path="/reports"
+                element={
+                  <PortalAuth portalName="Reports Portal" role={UserRole.ADMIN}>
+                    <ReportsPage />
+                  </PortalAuth>
+                }
+              />
               <Route path="/public" element={<PublicPortal />} />
               <Route
                 path="/admin"

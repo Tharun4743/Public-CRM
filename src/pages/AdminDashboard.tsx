@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Complaint, ComplaintStatus, ComplaintStats } from '../types';
+import { getPortalAuthHeaders, getPortalUser } from '../utils/portalAuth';
 
 interface AnomalyReport {
   isAnomaly: boolean;
@@ -257,13 +258,16 @@ export const AdminDashboard = () => {
   };
 
   const getAuthHeaders = () => {
-    const userStr = localStorage.getItem('user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    return {
-      'Content-Type': 'application/json',
-      'x-user-id': user?.id || 'anonymous',
-      'x-user-role': user?.role || 'visitor'
-    };
+    return getPortalAuthHeaders();
+  };
+
+  const safeParseJson = (value: string | undefined, fallback: any) => {
+    if (!value) return fallback;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
   };
 
   // Debounced Search Effect
@@ -277,20 +281,25 @@ export const AdminDashboard = () => {
 
   // Socket notification listener for anomalies
   React.useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    const user = userStr ? JSON.parse(userStr) : null;
+    const user = getPortalUser();
     if (!user || user.role !== 'Admin') return;
+    let socket: any = null;
+    let mounted = true;
 
     import('socket.io-client').then(({ default: io }) => {
-      const socket = io();
+      if (!mounted) return;
+      socket = io({ auth: { token: user.token } });
       socket.emit('join-room', 'Admin');
       socket.on('notification', (notif: any) => {
         if (notif.type === 'alert') {
           fetchActiveAnomalies();
         }
       });
-      return () => socket.disconnect();
     });
+    return () => {
+      mounted = false;
+      if (socket) socket.disconnect();
+    };
   }, []);
 
   const handleExport = async () => {
@@ -894,13 +903,13 @@ export const AdminDashboard = () => {
                              <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 overflow-hidden">
                                 <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-2">Original State</span>
                                 <pre className="text-[10px] font-mono text-zinc-600 overflow-x-auto whitespace-pre-wrap max-h-40">
-                                   {JSON.stringify(JSON.parse(log.old_value || '{}'), null, 2)}
+                                   {JSON.stringify(safeParseJson(log.old_value, {}), null, 2)}
                                 </pre>
                              </div>
                              <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 overflow-hidden">
                                 <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block mb-2">Updated State</span>
                                 <pre className="text-[10px] font-mono text-emerald-700 overflow-x-auto whitespace-pre-wrap max-h-40">
-                                   {JSON.stringify(JSON.parse(log.new_value || '{}'), null, 2)}
+                                   {JSON.stringify(safeParseJson(log.new_value, {}), null, 2)}
                                 </pre>
                              </div>
                           </div>
@@ -1479,7 +1488,7 @@ export const AdminDashboard = () => {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            {JSON.parse(selectedComplaint.ai_tags || '[]').map((tag: string, i: number) => (
+                            {safeParseJson(selectedComplaint.ai_tags, []).map((tag: string, i: number) => (
                               <span key={i} className="px-3 py-1 bg-white text-emerald-700 text-[10px] font-black uppercase tracking-tighter rounded-full border border-emerald-100 shadow-sm">
                                 #{tag}
                               </span>

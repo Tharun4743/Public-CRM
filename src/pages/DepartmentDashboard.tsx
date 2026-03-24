@@ -2,11 +2,11 @@ import React from 'react';
 import { Building2, CheckCircle2, Clock, AlertCircle, Filter, Search, Sparkles, ChevronDown, ListCheck, Layers, Boxes, Activity, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Complaint, ComplaintStatus } from '../types';
+import { getPortalAuthHeaders, getPortalUser } from '../utils/portalAuth';
 
 export const DepartmentDashboard = () => {
   const [complaints, setComplaints] = React.useState<Complaint[]>([]);
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : null;
+  const user = getPortalUser();
   const [selectedDept, setSelectedDept] = React.useState(user?.department || 'Sanitation');
   const [isLoading, setIsLoading] = React.useState(true);
   const [resolutionData, setResolutionData] = React.useState<Record<string, any>>({});
@@ -23,10 +23,10 @@ export const DepartmentDashboard = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/complaints');
+      const response = await fetch('/api/complaints', { headers: getPortalAuthHeaders() });
       const data = await response.json();
       setComplaints(data.filter((c: Complaint) => c.department === selectedDept));
-      const lb = await fetch('/api/leaderboard').then((r) => r.json());
+      const lb = await fetch('/api/leaderboard', { headers: getPortalAuthHeaders() }).then((r) => r.json());
       setDeptRank(lb.find((x: any) => x.department === selectedDept) || null);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -53,11 +53,10 @@ export const DepartmentDashboard = () => {
     if (!resolvingComplaint || !resolveProofBase64 || !resolveNotes) return;
     setIsLoading(true);
     try {
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
+      const user = getPortalUser();
       const res = await fetch(`/api/complaints/${resolvingComplaint.id}/resolve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getPortalAuthHeaders(),
         body: JSON.stringify({ 
           proof: resolveProofBase64, 
           notes: resolveNotes, 
@@ -96,7 +95,7 @@ export const DepartmentDashboard = () => {
     try {
       const response = await fetch('/api/ai/resolution', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getPortalAuthHeaders(),
         body: JSON.stringify({ description, category, complaintId }),
       });
       const data = await response.json();
@@ -117,7 +116,7 @@ export const DepartmentDashboard = () => {
     try {
       await fetch(`/api/complaints/${id}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getPortalAuthHeaders(),
         body: JSON.stringify({ status }),
       });
       fetchData();

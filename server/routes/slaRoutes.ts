@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { SLARule } from '../models/Reporting.ts';
+import { requireAdminAuth } from '../middleware/auth.ts';
 
 const router = Router();
 
-router.get('/rules', async (_req, res) => {
+router.get('/rules', requireAdminAuth, async (_req, res) => {
   try {
     const rows = await SLARule.find().sort({ created_at: -1 }).lean();
     res.json(rows);
@@ -12,7 +13,7 @@ router.get('/rules', async (_req, res) => {
   }
 });
 
-router.post('/rules', async (req, res) => {
+router.post('/rules', requireAdminAuth, async (req, res) => {
   try {
     const r = req.body;
     await SLARule.create({
@@ -32,7 +33,7 @@ router.post('/rules', async (req, res) => {
   }
 });
 
-router.put('/rules/:id', async (req, res) => {
+router.put('/rules/:id', requireAdminAuth, async (req, res) => {
   try {
     const r = req.body;
     await SLARule.findByIdAndUpdate(req.params.id, {

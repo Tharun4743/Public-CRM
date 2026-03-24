@@ -4,6 +4,12 @@ dotenv.config();
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_MODEL = process.env.AI_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
+const OPENROUTER_FALLBACK_MODELS = [
+    AI_MODEL,
+    process.env.AI_FALLBACK_MODEL,
+    'openai/gpt-4o-mini',
+    'meta-llama/llama-3.1-8b-instruct:free'
+].filter((m, i, arr): m is string => !!m && arr.indexOf(m) === i);
 
 export interface AIAnalysis {
     suggestedPriority: string;
@@ -36,63 +42,89 @@ async function callAI(prompt: string): Promise<any> {
 
     try {
         if (AI_API_KEY) {
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${AI_API_KEY}`,
-                    'HTTP-Referer': 'https://pscrm.teamgoat.com', // Optional, for OpenRouter tracking
-                    'X-Title': 'Smart Public Service CRM',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: AI_MODEL,
-                    messages: [
-                        { role: 'user', content: prompt + "\nRespond only with the requested JSON object." }
-                    ],
-                    response_format: { type: 'json_object' }
-                }),
-                signal: controller.signal
-            });
+            let lastOpenRouterError: string | null = null;
+            for (const model of OPENROUTER_FALLBACK_MODELS) {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${AI_API_KEY}`,
+                        'HTTP-Referer': 'https://pscrm.teamgoat.com',
+                        'X-Title': 'Smart Public Service CRM',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model,
+                        messages: [
+                            { role: 'user', content: prompt + "\nRespond only with the requested JSON object." }
+                        ],
+                        response_format: { type: 'json_object' }
+                    }),
+                    signal: controller.signal
+                });
 
-            clearTimeout(timeout);
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`OpenRouter Error: ${response.status} - ${errorText}`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    lastOpenRouterError = `Model ${model} failed: ${response.status} - ${errorText}`;
+                    continue;
+                }
+
+                clearTimeout(timeout);
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                if (!content) continue;
+                return safeParseAIJson(content);
             }
 
-            const data = await response.json();
-            const content = data.choices[0].message.content;
-            return content ? JSON.parse(content) : null;
+            console.error('OpenRouter all-model attempts failed:', lastOpenRouterError);
         } else {
-            const response = await fetch(OLLAMA_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    model: process.env.OLLAMA_MODEL || 'llama3.1',
-                    prompt,
-                    format: 'json',
-                    stream: false
-                }),
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            });
-
-            clearTimeout(timeout);
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Ollama Error: ${response.status} - ${errorText}`);
-            }
-            
-            const data: any = await response.json();
-            const content = data.response;
-            
-            return content ? JSON.parse(content) : null;
+            // continue to Ollama fallback block below
         }
+
+        const response = await fetch(OLLAMA_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                model: process.env.OLLAMA_MODEL || 'llama3.1',
+                prompt,
+                format: 'json',
+                stream: false
+            }),
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Ollama Error: ${response.status} - ${errorText}`);
+        }
+
+        const data: any = await response.json();
+        const content = data.response;
+        if (!content) return null;
+        return safeParseAIJson(content);
     } catch (error) {
         clearTimeout(timeout);
         console.error('AI Service HTTP Error:', error);
         throw error; // Re-throw to be caught by the individual functions' try/catch
+    }
+}
+
+function safeParseAIJson(content: string): any {
+    try {
+        return JSON.parse(content);
+    } catch {
+        const cleaned = content
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .trim();
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end > start) {
+            return JSON.parse(cleaned.slice(start, end + 1));
+        }
+        throw new Error('Could not parse AI JSON response');
     }
 }
 
@@ -130,8 +162,8 @@ export const aiService = {
                 }
                 Repeat citizen categories history: ${JSON.stringify(citizenHistory)}
             `;
-
             const result = await callAI(prompt);
+            console.log(`[AI] Analysis result:`, result);
             return result || fallback;
         } catch (error) {
             console.error('analyzeComplaint AI Fallback Triggered:', error);

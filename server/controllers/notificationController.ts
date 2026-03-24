@@ -1,19 +1,20 @@
 import { Request, Response } from "express";
 import { notificationService } from "../services/notificationService.ts";
+import { AuthenticatedRequest } from "../middleware/auth.ts";
 
 export const notificationController = {
-  getNotifications: async (req: Request, res: Response) => {
+  getNotifications: async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { userId } = req.query;
+      const userId = req.citizen?.id;
       if (!userId) return res.status(400).json({ message: "User ID required" });
-      const notifications = await notificationService.getForUser(userId as string);
+      const notifications = await notificationService.getForUser(userId);
       res.json(notifications);
     } catch (error) {
       res.status(500).json({ message: "Error fetching notifications" });
     }
   },
 
-  markRead: async (req: Request, res: Response) => {
+  markRead: async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { id } = req.params;
       await notificationService.markAsRead(id);
@@ -23,9 +24,10 @@ export const notificationController = {
     }
   },
 
-  markAllRead: async (req: Request, res: Response) => {
+  markAllRead: async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { userId } = req.body;
+      const userId = req.citizen?.id;
+      if (!userId) return res.status(400).json({ message: "User ID required" });
       await notificationService.markAllAsRead(userId);
       res.json({ message: "Marked all as read" });
     } catch (error) {

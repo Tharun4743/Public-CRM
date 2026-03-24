@@ -47,7 +47,7 @@ const corsOptions = {
   origin: process.env.NODE_ENV === 'production' ? (process.env.APP_URL || true) : true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-admin-key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key']
 };
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
@@ -108,14 +108,6 @@ app.get('*', (req, res) => {
   });
 });
 
-// Socket.io
-io.on("connection", (socket) => {
-  socket.on("join-room", (room) => {
-    socket.join(room);
-    console.log(`Socket joined room: ${room}`);
-  });
-});
-
 // Start Server
 const PORT = process.env.PORT || 3001;
 
@@ -131,26 +123,19 @@ const startServer = async () => {
         console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'SET' : 'NOT SET');
         console.log('- ADMIN_DB_KEY:', process.env.ADMIN_DB_KEY ? 'SET' : 'NOT SET');
         
-        // Start HTTP server first
+        // Connect to database with error handling
+        console.log('Connecting to database...');
+        await connectDb();
+        console.log('✅ Database connected');
+
+        // Start HTTP server only after successful startup dependencies
         const server = httpServer.listen(PORT, () => {
             console.log(`✅ HTTP Server running on port ${PORT}`);
             console.log(`✅ Server ready to accept connections`);
         });
-        
-        // Set server timeout for Render
         server.timeout = 30000; // 30 seconds
         server.keepAliveTimeout = 65000;
         server.headersTimeout = 66000;
-        
-        // Connect to database with error handling
-        console.log('Connecting to database...');
-        try {
-            await connectDb();
-            console.log('✅ Database connected');
-        } catch (dbError) {
-            console.error('❌ Database connection failed:', dbError.message);
-            console.log('⚠️ Continuing without database - some features may not work');
-        }
         
         // Start services with error handling
         try {

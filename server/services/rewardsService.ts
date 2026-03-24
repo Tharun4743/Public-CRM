@@ -73,10 +73,10 @@ export const rewardsService = {
   },
 
   redeemVoucher: async (citizenId: string, voucherTypeId: string) => {
-    const voucherType = await VoucherType.findOne({ _id: voucherTypeId, is_active: true });
+    const voucherType = await VoucherType.findOne({ _id: voucherTypeId, is_active: true }).lean();
     if (!voucherType) throw new Error('Voucher type not found or inactive');
 
-    const citizen = await Citizen.findById(citizenId);
+    const citizen = await Citizen.findById(citizenId).lean();
     if (!citizen || citizen.total_points < voucherType.points_required) {
       throw new Error('Insufficient points');
     }
@@ -89,9 +89,23 @@ export const rewardsService = {
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30);
 
-    // Mongoose transaction or individual updates (keeping it simple for now)
-    citizen.total_points -= voucherType.points_required;
-    await citizen.save();
+    const updatedCitizen = await Citizen.findOneAndUpdate(
+      { _id: citizenId, total_points: { $gte: voucherType.points_required } },
+      { $inc: { total_points: -voucherType.points_required } },
+      { new: true }
+    );
+    if (!updatedCitizen) throw new Error('Insufficient points');
+
+    const updatedVoucherType = await VoucherType.findOneAndUpdate(
+      { _id: voucherTypeId, is_active: true, total_available: { $gt: 0 } },
+      { $inc: { total_available: -1 } },
+      { new: true }
+    );
+    if (!updatedVoucherType) {
+      // Compensating action when stock changes concurrently after point deduction.
+      await Citizen.findByIdAndUpdate(citizenId, { $inc: { total_points: voucherType.points_required } });
+      throw new Error('Voucher out of stock');
+    }
 
     await Voucher.create({
       citizen_id: citizenId,
@@ -101,9 +115,6 @@ export const rewardsService = {
       points_required: voucherType.points_required,
       expires_at: expiry
     });
-
-    voucherType.total_available -= 1;
-    await voucherType.save();
 
     return { code, title: voucherType.title, email: citizen.email };
   }

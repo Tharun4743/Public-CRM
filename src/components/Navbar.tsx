@@ -17,10 +17,31 @@ export const Navbar = () => {
   React.useEffect(() => {
     const checkBreach = async () => {
       try {
-        const res = await fetch('/api/complaints/breach-status');
-        const data = await res.json();
-        setHasBreached(data.hasBreached);
-      } catch (err) {}
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        
+        // Only check breach status if user is authenticated
+        if (!user || (user.role !== 'Admin' && user.role !== 'Officer')) {
+          return;
+        }
+        
+        const token = localStorage.getItem('token') || localStorage.getItem('citizen_token');
+        if (!token) return;
+        
+        const res = await fetch('/api/complaints/breach-status', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setHasBreached(data.hasBreached);
+        }
+      } catch (err) {
+        console.log('Breach status check failed:', err);
+      }
     };
     checkBreach();
     const interval = setInterval(checkBreach, 60000);

@@ -228,6 +228,7 @@ export const PortalAuth: React.FC<PortalAuthProps> = ({ children, portalName, ro
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-xl text-zinc-400 hover:text-emerald-600 transition-colors"
                   title={showPassword ? "Hide Password" : "Show Password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>

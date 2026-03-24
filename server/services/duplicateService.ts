@@ -66,10 +66,15 @@ export const duplicateService = {
     
     if (existing) return { success: false, message: 'Already voted' };
 
-    await ComplaintVote.create({
-      complaint_id: complaintId,
-      citizen_email: email
-    });
+    try {
+      await ComplaintVote.create({
+        complaint_id: complaintId,
+        citizen_email: email
+      });
+    } catch (error: any) {
+      if (error?.code === 11000) return { success: false, message: 'Already voted' };
+      throw error;
+    }
     
     const complaint = await Complaint.findOneAndUpdate(
       { _id: complaintId },
