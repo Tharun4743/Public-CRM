@@ -6,12 +6,15 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNotifications } from '../context/NotificationContext';
+import { useLanguage } from '../context/LanguageContext';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
   const [hasBreached, setHasBreached] = React.useState(false);
   const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications();
+  const { t } = useLanguage();
   const location = useLocation();
 
   React.useEffect(() => {
@@ -52,24 +55,24 @@ export const Navbar = () => {
     if (location.pathname === '/citizen-login') return [];
     if (location.pathname.startsWith('/citizen') || location.pathname === '/track') {
       return [
-        { name: 'Submit Complaint', path: '/citizen', icon: FileText },
-        { name: 'Track Status', path: '/track', icon: Search },
+        { name: t('nav_submit'), path: '/citizen', icon: FileText },
+        { name: t('nav_track'), path: '/track', icon: Search },
       ];
     }
     if (location.pathname.startsWith('/admin') || location.pathname === '/analytics') {
       return [
-        { name: 'Admin Dashboard', path: '/admin', icon: LayoutDashboard },
-        { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+        { name: t('nav_admin'), path: '/admin', icon: LayoutDashboard },
+        { name: t('nav_analytics'), path: '/analytics', icon: BarChart3 },
       ];
     }
     if (location.pathname.startsWith('/officer')) {
       return [
-        { name: 'Officer Portal', path: '/officer', icon: Building2 },
+        { name: t('nav_officer'), path: '/officer', icon: Building2 },
       ];
     }
     if (location.pathname === '/register') {
       return [
-        { name: 'Create Account', path: '/register', icon: UserPlus },
+        { name: t('nav_register'), path: '/register', icon: UserPlus },
       ];
     }
     return [];
@@ -132,6 +135,7 @@ export const Navbar = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                <LanguageSwitcher />
                 {navItems.length > 0 && (
                   <button
                     onClick={() => setIsNotifOpen(true)}

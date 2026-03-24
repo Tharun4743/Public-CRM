@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Building2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useLanguage } from '../context/LanguageContext';
 
 export const LandingPage = () => {
   const [selectedPortal, setSelectedPortal] = useState<'citizen' | 'officer'>('citizen');
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const portals = [
     {
       id: 'citizen',
-      title: 'Citizen Portal',
+      title: t('citizen_portal'),
       icon: User,
       path: '/citizen-login',
       color: 'text-emerald-600',
@@ -19,7 +21,7 @@ export const LandingPage = () => {
     },
     {
       id: 'officer',
-      title: 'Officer Portal',
+      title: t('officer_portal'),
       icon: Building2,
       path: '/officer',
       color: 'text-blue-600',
@@ -44,7 +46,7 @@ export const LandingPage = () => {
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wider mb-6"
         >
           <CheckCircle2 size={14} />
-          Official Public Services CRM
+          {t('official_crm')}
         </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: -20 }}
@@ -52,8 +54,8 @@ export const LandingPage = () => {
           transition={{ delay: 0.1 }}
           className="text-5xl sm:text-7xl font-black text-zinc-900 tracking-tight mb-6 font-display leading-tight"
         >
-          Smart Public <br />
-          <span className="text-emerald-600">Services CRM</span>
+          {t('smart_public')} <br />
+          <span className="text-emerald-600">{t('services_crm')}</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: -20 }}
@@ -61,7 +63,7 @@ export const LandingPage = () => {
           transition={{ delay: 0.2 }}
           className="text-xl text-zinc-600 max-w-2xl mx-auto font-light leading-relaxed"
         >
-          A unified digital platform for transparent governance and faster grievance resolution.
+          {t('tagline')}
         </motion.p>
       </div>
 
@@ -117,14 +119,14 @@ export const LandingPage = () => {
           onClick={handleEnterPortal}
           className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg hover:shadow-emerald-200 active:scale-[0.98] group"
         >
-          Enter Portal
+          {t('enter_portal')}
           <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </motion.div>
 
       <div className="mt-16 text-center">
         <p className="text-zinc-400 text-sm font-medium">
-          Secure, Transparent, and Citizen-Centric Governance.
+          {t('governance_tag')}
         </p>
       </div>
     </div>

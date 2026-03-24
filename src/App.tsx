@@ -13,6 +13,7 @@ import { Register } from './pages/Register';
 import { Feedback } from './pages/Feedback';
 import { UserRole } from './types';
 import { NotificationProvider } from './context/NotificationContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { CitizenLogin } from './pages/CitizenLogin';
 
 import { LeaderboardPage } from './pages/LeaderboardPage';
@@ -24,6 +25,7 @@ import { CitizenDashboard } from './pages/CitizenDashboard';
 export default function App() {
   return (
     <Router>
+      <LanguageProvider>
       <NotificationProvider>
         <div className="min-h-screen font-sans selection:bg-emerald-100 selection:text-emerald-800 overflow-x-hidden">
           <BackgroundDecoration />
@@ -113,6 +115,7 @@ export default function App() {
           </footer>
         </div>
       </NotificationProvider>
+      </LanguageProvider>
     </Router>
   );
 }
