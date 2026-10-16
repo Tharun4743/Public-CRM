@@ -30,6 +30,19 @@ Public CRM is a modern citizen relationship management platform. Citizens easily
 ---
 
 ## 4. ⚙️ Technical Approach & System Architecture
+
+### 📐 High-Level Architectural Flowchart:
+```mermaid
+graph TD
+    Citizen["Citizen Web / Mobile Grievance Portal"] -->|Submit Issue + Geotag| Gateway["Public CRM Gateway (Next.js / Node)"]
+    Gateway --> TicketService["Grievance Lifecycle & Category Classifier"]
+    TicketService --> SLAEngine["Automated SLA Tracking & Escalation Daemon"]
+    TicketService --> OfficerPortal["Municipal Department Ward Officer Queue"]
+    OfficerPortal -->|Status Update & Photo Proof| TicketService
+    TicketService --> Notifier["Citizen SMS / WhatsApp Status Dispatcher"]
+    TicketService --> Analytics["City Administration SLA & Ward Heatmap Dashboard"]
+```
+
 | Governance Stage | Technology | System Mechanism |
 | :--- | :--- | :--- |
 | **Grievance Filing** | React 19, Leaflet Map GIS | Citizen geo-pins location, uploads photographic proof of infrastructure breakdown |
