@@ -64,9 +64,7 @@ graph TD
 
 ---
 
-## 7. 👨‍💻 Author & Intellectual Property License
-
-## 👨‍💻 Engineering Author
+## 7. 👨‍💻 Engineering Author
 
 <table border="0">
   <tr>
