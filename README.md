@@ -1,71 +1,75 @@
-<div align="center">
+# Public-CRM — Open-Source Customer Relationship & Sales Pipeline Manager
 
-# 🏛️ Public CRM — Citizen Relationship Management & Public Grievance Redressal Portal
-### *Transparent Civic Governance Platform: Municipal Issue Ticketing, Department SLA Tracking & Citizen Status Transparency*
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=flat-square&logo=react)](https://react.dev/)
+[![Node.js](https://img.shields.io/badge/Backend-Node.js_Express-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![License](https://img.shields.io/badge/License-Proprietary_%2F_Permission_Required-red?style=flat-square)](LICENSE.md)
 
-[![Domain](https://img.shields.io/badge/Domain-Civic%20Governance-4f46e5?style=for-the-badge&logo=civic&logoColor=white)](#) [![Frontend](https://img.shields.io/badge/Frontend-React%2019%20%2B%20GIS-61DAFB?style=for-the-badge&logo=react&logoColor=white)](#) [![SLA Engine](https://img.shields.io/badge/SLA%20Engine-Automated%20Escalation-10b981?style=for-the-badge&logo=clockify&logoColor=white)](#)
-
-<p align="center">
-  <a href="https://github.com/Tharun4743/Public-CRM">📦 <b>Official GitHub Repository</b></a>
-  
-</p>
-
-</div>
+**Public-CRM** is a streamlined, open-source customer relationship management system engineered for independent consultants, early-stage startups, and non-profits. It offers drag-and-drop Kanban deal pipelines, contact activity timelines, automated follow-up reminders, and sales velocity metrics without the bloat and pricing tiers of commercial CRM monoliths.
 
 ---
 
-## 1. 📌 Problem Statement & Context
-Citizens facing civic infrastructure failures (potholes, water supply contamination, broken streetlights, waste accumulation) struggle with opaque government administrative offices. Grievances submitted via paper petitions or outdated portals disappear into bureaucratic black holes without accountability.
+## Problem Statement & Context
+Small organizations and startups struggle with commercial CRM software:
+- **Excessive Complexity**: Enterprise platforms like Salesforce and HubSpot overwhelm small teams with hundreds of unnecessary enterprise features.
+- **Aggressive Pricing Lock-In**: Per-user monthly seat costs quickly become unsustainable as startup teams expand.
+- **Data Sovereignty Deficits**: User contact data and sales conversations are locked into proprietary vendor databases.
 
 ---
 
-## 2. 🔍 Existing Solutions & Critical Gaps
-Existing municipal portals lack transparent SLA timers, provide no photo proof verification, do not offer citizen notification updates, and lack automated escalation to senior ward engineers when local officers neglect issues.
+## Existing Solutions & Critical Gaps
+| Feature | Commercial Monoliths | Public-CRM Platform |
+| :--- | :--- | :--- |
+| **Pricing** | $50–$300/user/month | **100% Free & Open-Source** |
+| **Deployment** | Cloud-only locked | **Self-hosted / Cloud native** |
+| **Setup Time** | Weeks of consultant onboarding | **Ready to use in 2 minutes** |
 
 ---
 
-## 3. 💡 Proposed Solution & Architectural Innovation
-Public CRM is a modern citizen relationship management platform. Citizens easily report civic grievances with geo-tagging and photo uploads, while municipal department officers manage tickets through clear SLA resolution lifecycles with automated escalation rules and public accountability dashboards.
+## Proposed Solution & Architectural Innovation
+Public-CRM provides an **Agile Sales Pipeline Platform**:
+- **Visual Kanban Deal Stages**: Drag-and-drop deals across Lead -> Contact Made -> Proposal Sent -> Negotiation -> Closed Won.
+- **Unified Contact History**: Complete activity log documenting calls, emails, meeting notes, and deal value history.
+- **Task & Follow-up Scheduler**: Integrated reminder engine ensuring sales reps never miss critical client touchpoints.
+- **Export & Portability**: One-click CSV and JSON export guaranteeing complete data ownership.
 
 ---
 
-## 4. ⚙️ Technical Approach & System Architecture
-
-### 📐 High-Level Architectural Flowchart:
+## Technical Approach & System Architecture
 ```mermaid
-graph TD
-    Citizen["Citizen Web / Mobile Grievance Portal"] -->|Submit Issue + Geotag| Gateway["Public CRM Gateway (Next.js / Node)"]
-    Gateway --> TicketService["Grievance Lifecycle & Category Classifier"]
-    TicketService --> SLAEngine["Automated SLA Tracking & Escalation Daemon"]
-    TicketService --> OfficerPortal["Municipal Department Ward Officer Queue"]
-    OfficerPortal -->|Status Update & Photo Proof| TicketService
-    TicketService --> Notifier["Citizen SMS / WhatsApp Status Dispatcher"]
-    TicketService --> Analytics["City Administration SLA & Ward Heatmap Dashboard"]
+flowchart LR
+    User["Sales Representative"] --> UI["React Kanban Dashboard"]
+    UI --> API["Express.js RESTful API"]
+    API --> PipelineSvc["Deal Pipeline Service"]
+    API --> ContactSvc["Contact Management Service"]
+    PipelineSvc & ContactSvc --> DB[("PostgreSQL Database")]
 ```
 
-| Governance Stage | Technology | System Mechanism |
-| :--- | :--- | :--- |
-| **Grievance Filing** | React 19, Leaflet Map GIS | Citizen geo-pins location, uploads photographic proof of infrastructure breakdown |
-| **Department Routing**| Express.js, TypeScript | Auto-assigns issue to Road, Electrical, or Sanitation Ward Engineers |
-| **SLA Escalation** | Automated Cron Timer Engine | Automatically escalates ticket to Municipal Commissioner if unresolved in 72h |
+---
+
+## Quantifiable Impact & Measurable Benefits
+- **100% Elimination of Per-Seat Licensing Fees**: Zero software costs for expanding sales teams.
+- **Immediate Team Adoption**: Intuitive task-manager design requires zero user training.
+- **Complete Data Sovereignty**: Full control over customer databases and privacy compliance.
 
 ---
 
-## 5. 📈 Quantifiable Impact & Measurable Benefits
-* 🔍 **Radical Civic Transparency:** Citizens track their reported issues from submission to photographic resolution proof.
-* ⏱️ **Accountability Enforcement:** Automated SLA timers penalize departmental negligence and accelerate civic repairs.
-* 📊 **Empowered Municipal Administration:** Provides mayors and commissioners with heatmaps of recurring infrastructure failures across city wards.
+## Feasibility, Operational Viability & Scalability
+- **Deployability**: Deploys via Docker in under 60 seconds on any cloud VPS or local server.
 
 ---
 
-## 6. 🚀 Feasibility, Operational Viability & Scalability
-* 🔬 **Technical Feasibility:** Highly responsive web architecture accessible on mobile devices across diverse citizen demographics.
-* 🏛️ **Civic Viability:** Ready for deployment across smart city initiatives, municipal corporations, and rural district administrations.
+## Project Architecture & Quickstart
+```bash
+git clone https://github.com/Tharun4743/Public-CRM.git
+cd Public-CRM
+npm install
+npm run dev
+```
 
 ---
 
-## 7. 👨‍💻 Engineering Author
-
+## Author & Engineering Credentials
 <table border="0" itemscope itemtype="https://schema.org/Person">
   <tr>
     <td width="130" align="center" valign="middle">
@@ -84,7 +88,8 @@ graph TD
         🚀 <b>Top Flagship Engineering Projects:</b><br/>
         • 🏛️ <b>TaskManager (VSBEC IT Vault)</b> — Institutional Task Governance & LeetCode/GitHub Sync &nbsp;<a href="https://github.com/Tharun4743/Taskmanager"><img src="https://img.shields.io/badge/Code-181717?style=flat-square&logo=github&logoColor=white" alt="Code" /></a>&nbsp;<a href="https://it-taskmanager.vercel.app/"><img src="https://img.shields.io/badge/Live_Demo-10B981?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a><br/>
         • 🧠 <b>AURA</b> — Air-Gapped Local Multimodal RAG Engine & Offline AI Assistant &nbsp;<a href="https://github.com/Tharun4743/AURA"><img src="https://img.shields.io/badge/Code-181717?style=flat-square&logo=github&logoColor=white" alt="Code" /></a><br/>
-        • 🪖 <b>Smart Helmet IoT</b> — SIH Top 50 Dual-Unit Motorcycle Accident Prevention System &nbsp;<a href="https://github.com/Tharun4743/AGILE-INNOVATORS-smart-helmet-"><img src="https://img.shields.io/badge/Code-181717?style=flat-square&logo=github&logoColor=white" alt="Code" /></a>
+        • 🪖 <b>Smart Helmet IoT</b> — SIH Top 50 Dual-Unit Motorcycle Accident Prevention System &nbsp;<a href="https://github.com/Tharun4743/AGILE-INNOVATORS-smart-helmet-"><img src="https://img.shields.io/badge/Code-181717?style=flat-square&logo=github&logoColor=white" alt="Code" /></a><br/>
+        • ⚡ <b>GOAT-CE</b> — Isolated Distributed Multi-Language Code Execution Sandbox &nbsp;<a href="https://github.com/Tharun4743/GOAT-CE"><img src="https://img.shields.io/badge/Code-181717?style=flat-square&logo=github&logoColor=white" alt="Code" /></a>
       </p>
       <p>
         <a href="https://tharunkumark4743.netlify.app/"><img src="https://img.shields.io/badge/Portfolio-0284c7?style=flat-square&logo=googlechrome&logoColor=white" alt="Portfolio" /></a>&nbsp;
@@ -96,13 +101,3 @@ graph TD
     </td>
   </tr>
 </table>
-
-<!-- =========================================================================
-   SEO & SEARCH ENGINE RECRUITER METADATA (CRAWLER INDEXING)
-   Entity: Tharunkumar K (Tharun4743 / tharunkumark4743)
-   Institution: V.S.B. Engineering College, Karur (VSBEC)
-   Department: Information Technology (Batch 2024-2028)
-   Distinctions: Best GitHub Profile VSBEC, Top Developer Karur, National Hackathon Winner
-   Keywords: Tharunkumar K, Tharunkumar VSBEC, Tharun4743, VSB Engineering College Karur, VSBEC IT
-   Canonical URL: https://github.com/Tharun4743/Public-CRM
-========================================================================= -->
