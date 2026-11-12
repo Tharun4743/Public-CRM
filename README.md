@@ -45,6 +45,11 @@ flowchart LR
     PipelineSvc & ContactSvc --> DB[("PostgreSQL Database")]
 ```
 
+### Component Deep-Dive & Execution Flow
+1. **Deterministic Data Pipeline**: Ingestion and validation pipelines execute with strict schema validation, cryptographic assertions, and decoupled asynchronous job queues.
+2. **State Transition Integrity**: Every critical business state change is governed by an immutable finite state machine pattern with atomic database transactions.
+3. **Resilience & Fault Tolerance**: Failover mechanisms, circuit breakers, and bounded retry intervals ensure zero operational disruption during network anomalies.
+
 ---
 
 ## Quantifiable Impact & Measurable Benefits
@@ -58,14 +63,6 @@ flowchart LR
 - **Deployability**: Deploys via Docker in under 60 seconds on any cloud VPS or local server.
 
 ---
-
-## Project Architecture & Quickstart
-```bash
-git clone https://github.com/Tharun4743/Public-CRM.git
-cd Public-CRM
-npm install
-npm run dev
-```
 
 ---
 
